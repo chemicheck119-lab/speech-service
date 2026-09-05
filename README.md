@@ -22,10 +22,44 @@
 | 항목 | 상태 |
 |---|---|
 | 저장소·CI 골격 | 구현 완료 |
-| faster-whisper 기준선 | 설계 전·구현 전 |
-| AIHub 신고음성 전처리 | 설계 전·구현 전 |
-| 화학용어 후처리 | 검증되지 않은 가설 |
+| faster-whisper 1.2.1 배치 평가 하네스 | 구현 완료 |
+| AIHub 신고음성 ZIP 로딩·고정 77건 평가 | 구현·실행 완료 |
+| 기본 전사 vs hotword 힌트 A/B | 측정 완료·hotword 기본값 제외 |
+| 실시간 스트리밍 API·패드 연동 | 설계·구현 전 |
+| 파인튜닝·새 모델 가중치 | 구현 전 |
+| 화학용어 사후 자동교정 | 미구현; 원문 보존 원칙상 현재 범위 제외 |
 | 현장 무전 성능 | 검증되지 않음 |
+
+## 고정 비교실험
+
+두 조건은 `small`, beam 5, 한국어 고정, VAD 사용, 이전 문맥 비사용으로 동일합니다. B 조건에만 사전 등록한 우선 용어를 faster-whisper의 `hotwords` 인자로 제공합니다. 평가 순서는 레코드마다 교차해 순서 편향을 줄입니다.
+
+- 주 지표: 정규화 CER, 보조 지표: WER
+- 안전 관련 지표: 우선 용어 presence recall·precision·false insertion
+- 실행 지표: 처리시간과 RTF(real-time factor)
+- 불확실성: 레코드 단위 paired bootstrap 95% 구간, seed 119
+- 고정 평가셋: AIHub 광주 화재 Validation 77건
+
+`--limit`를 사용한 실행은 항상 `development smoke`로 기록됩니다. 77건 전체가 확인된 경우에만 고정 평가 ID를 부여합니다.
+
+AIHub 자료는 신고접수 전화 음성입니다. 이 결과를 잡음·통신 왜곡이 다른 현장 무전기의 성능으로 표현하면 안 됩니다. 구간의 `avg_log_probability`도 정답 확률이 아닌 보정되지 않은 디코딩 점수입니다.
+
+```bash
+python -m pip install .
+chemicheck119-speech-eval \
+  --audio-archive /secure/VS_광주_화재.zip \
+  --label-archive /secure/VL_광주_화재.zip \
+  --dataset-manifest /secure/aihub-71768-gwangju-fire-validation.json \
+  --hotwords-file config/domain_hotwords.txt \
+  --model small --device cpu --compute-type int8 \
+  --output-dir outputs
+```
+
+`records.private.jsonl`에는 참조·가설 전사문이 들어가므로 비공개 버킷에만 저장합니다. 콘솔에는 진행 건수와 최종 위치만 출력합니다.
+
+고정 평가 ID는 manifest의 데이터 버전·77건 선언과 두 ZIP의 SHA-256이 모두 일치할 때만 부여됩니다. ZIP 멤버는 WAV 32MiB, 라벨 4MiB, 압축비 200배, 음성 300초로 제한합니다. GPU 초기화가 실패하면 CPU int8로 안전하게 전환하고 실제 device와 오류 유형을 결과에 기록합니다.
+
+고정 77건 평가에서는 기본 전사의 CER가 43.75%, hotword 조건이 56.28%였습니다. hotword는 우선 용어 재현율을 높였지만 실제로 없던 용어 삽입을 크게 늘려 기본값에서 제외했습니다. 수치의 정의, 실행 해시, 제한 사항은 [AIHub 광주 화재 음성 평가 보고서](docs/AIHUB_광주_화재_음성_평가.md)에 기록했습니다.
 
 ## 기본 검증
 
