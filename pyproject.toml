@@ -7,6 +7,13 @@ name = "chemicheck119-speech"
 version = "0.1.0"
 description = "Speech recognition boundary for ChemiCheck119"
 requires-python = ">=3.11"
+dependencies = [
+  "faster-whisper==1.2.1",
+  "google-cloud-storage==3.3.1",
+]
+
+[project.scripts]
+chemicheck119-speech-eval = "chemicheck119_speech.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -13,6 +13,7 @@ data/
 artifacts/
 models/
 outputs/
+.model-cache/
 *.wav
 *.mp3
 *.flac
