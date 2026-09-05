@@ -95,6 +95,19 @@ chemicheck119-speech-cross-region-report \
   --output /private/cross-region-report.json
 ```
 
+비공개 레코드의 반복 오류를 확인할 때는 원문 대신 공개 우선용어별 누락·오삽입과 길이·
+CER·WER·RTF 분포만 집계합니다. 모델의 `avg_log_probability` 등은 보정된 정확도 확률이
+아닙니다. 이 보고서의 CER·WER 평균은 레코드별 macro 평균이며, 기본 평가 요약의
+문자·단어 수 가중 corpus CER·WER와 서로 다른 집계입니다.
+
+```bash
+chemicheck119-speech-failure-analysis \
+  --records-private /private/incheon/records.private.jsonl \
+  --summary /private/incheon/summary.json \
+  --priority-terms config/domain_hotwords.txt \
+  --output /private/incheon/failure-analysis.json
+```
+
 ## 모의 통신 왜곡 강건성 평가
 
 `data-pipeline`의 고정 `radio-sim-v1` 실행이 만든 clean 대조군과 17개 왜곡 조건을 동일
