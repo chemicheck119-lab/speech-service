@@ -25,6 +25,8 @@
 | faster-whisper 1.2.1 배치 평가 하네스 | 구현 완료 |
 | AIHub 신고음성 ZIP 로딩·고정 77건 평가 | 구현·실행 완료 |
 | 기본 전사 vs hotword 힌트 A/B | 측정 완료·hotword 기본값 제외 |
+| `radio-sim-v1` paired 강건성 평가 실행기 | 부분 구현 또는 개발용 데모 |
+| 서울·인천 모의 통신 왜곡 실제 측정 | 설계 완료·실행 전 |
 | 실시간 스트리밍 API·패드 연동 | 설계·구현 전 |
 | 파인튜닝·새 모델 가중치 | 구현 전 |
 | 화학용어 사후 자동교정 | 미구현; 원문 보존 원칙상 현재 범위 제외 |
@@ -80,6 +82,36 @@ chemicheck119-speech-eval \
 
 교차지역 결과도 신고접수 전화 성능이며 현장 무전 성능이 아닙니다. 자세한 사전 계획과
 채택 기준은 [교차지역 STT 평가 계획](docs/교차지역_STT_평가_계획.md)에 기록합니다.
+
+## 모의 통신 왜곡 강건성 평가
+
+`data-pipeline`의 고정 `radio-sim-v1` 실행이 만든 clean 대조군과 17개 왜곡 조건을 동일
+레코드끼리 비교합니다. 일부 조건만 빠진 실행은 공식 강건성 평가로 받지 않으며, 원본
+manifest·우선용어 목록·파생 manifest·audio/label archive의 SHA-256을 모두 확인한 뒤에만
+모델을 초기화합니다.
+
+```bash
+chemicheck119-speech-robustness-eval \
+  --run-summary gs://PRIVATE_BUCKET/derived/aihub/71768/seoul-fire/radio-sim-v1/run-summary.json \
+  --simulation-root gs://PRIVATE_BUCKET/derived/aihub/71768/seoul-fire/radio-sim-v1 \
+  --priority-terms config/domain_hotwords.txt \
+  --model small --device cpu --compute-type int8 \
+  --max-total-audio-hours 24 \
+  --output-dir outputs/seoul-radio-sim-v1
+```
+
+실행 전 18개 archive의 총 음성시간을 계산하며 24시간을 넘으면 모델 로딩 전에
+중단합니다. 이는 계획한 4 vCPU·최대 6시간 평가와 전체 70,000원 비용 한도를 지키기 위한
+사전 방어선입니다. 현재 배포된 기존 평가 Job의 timeout은 2시간이므로 실제 실행 전에
+별도 강건성 Job을 만들거나 표본 수를 줄여야 합니다. 결과에는 조건별
+CER·WER·RTF·우선용어 지표와 clean 대비
+paired CER bootstrap 구간, WER·용어 F1·false insertion 변화가 기록됩니다.
+`records.private.jsonl`에는 참조·가설 전사문이 있으므로 비공개 GCS에만 저장합니다.
+archive 한 개는 512MiB, 전체 materialize는 4GiB로 별도 제한합니다.
+
+이 평가는 **AIHub 신고 전화의 모의 통신 왜곡 강건성**일 뿐 실제 현장 무전 검증이
+아닙니다. STT 결과만으로 CAS를 확정하거나 Rule Engine을 실행할 수도 없습니다. 세부
+게이트는 [모의 통신 왜곡 STT 평가 계획](docs/모의_통신_왜곡_STT_평가_계획.md)을 따릅니다.
 
 ## 기본 검증
 
