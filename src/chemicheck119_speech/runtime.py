@@ -44,14 +44,35 @@ class FasterWhisperTranscriber:
     ) -> None:
         from faster_whisper import WhisperModel
 
-        self._model = WhisperModel(
-            model,
-            device=device,
-            compute_type=compute_type,
-            cpu_threads=cpu_threads,
-            download_root=download_root,
-            local_files_only=local_files_only,
-        )
+        self.requested_device = device
+        self.requested_compute_type = compute_type
+        self.actual_device = device
+        self.actual_compute_type = compute_type
+        self.initialization_fallback: str | None = None
+        options = {
+            "cpu_threads": cpu_threads,
+            "download_root": download_root,
+            "local_files_only": local_files_only,
+        }
+        try:
+            self._model = WhisperModel(
+                model,
+                device=device,
+                compute_type=compute_type,
+                **options,
+            )
+        except Exception as error:
+            if device != "cuda":
+                raise
+            self.actual_device = "cpu"
+            self.actual_compute_type = "int8"
+            self.initialization_fallback = type(error).__name__
+            self._model = WhisperModel(
+                model,
+                device="cpu",
+                compute_type="int8",
+                **options,
+            )
 
     def transcribe(self, audio_path: Path, hotwords: str | None) -> Transcript:
         generated, info = self._model.transcribe(

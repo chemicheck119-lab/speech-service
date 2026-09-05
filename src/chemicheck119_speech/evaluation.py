@@ -10,6 +10,7 @@ from pathlib import Path, PurePosixPath
 import tempfile
 import time
 from typing import Callable
+import wave
 import zipfile
 
 from .metrics import (
@@ -24,6 +25,10 @@ from .runtime import Transcript, Transcriber
 EVALUATION_ID = "speech_aihub119_gwangju_fire_validation_77"
 EXPECTED_EVALUATION_RECORDS = 77
 VARIANTS = ("baseline", "hotwords")
+MAX_AUDIO_MEMBER_BYTES = 32 * 1024 * 1024
+MAX_LABEL_MEMBER_BYTES = 4 * 1024 * 1024
+MAX_COMPRESSION_RATIO = 200
+MAX_AUDIO_SECONDS = 300.0
 
 
 def load_hotwords(path: Path) -> list[str]:
@@ -47,6 +52,50 @@ def _members(archive: zipfile.ZipFile, suffix: str) -> dict[str, str]:
             raise ValueError(f"duplicate archive stem: {stem}")
         result[stem] = name
     return result
+
+
+def _validate_member_size(
+    archive: zipfile.ZipFile, name: str, maximum_bytes: int
+) -> None:
+    info = archive.getinfo(name)
+    if info.file_size <= 0 or info.file_size > maximum_bytes:
+        raise ValueError(f"archive member has unsafe expanded size: {name}")
+    compression_ratio = info.file_size / max(1, info.compress_size)
+    if compression_ratio > MAX_COMPRESSION_RATIO:
+        raise ValueError(f"archive member has unsafe compression ratio: {name}")
+
+
+def _read_bounded(
+    archive: zipfile.ZipFile, name: str, maximum_bytes: int
+) -> bytes:
+    _validate_member_size(archive, name, maximum_bytes)
+    with archive.open(name) as source:
+        content = source.read(maximum_bytes + 1)
+    if len(content) > maximum_bytes:
+        raise ValueError(f"archive member exceeded read limit: {name}")
+    return content
+
+
+def _extract_audio_bounded(
+    archive: zipfile.ZipFile, name: str, destination: Path
+) -> float:
+    _validate_member_size(archive, name, MAX_AUDIO_MEMBER_BYTES)
+    written = 0
+    with archive.open(name) as source, destination.open("xb") as output:
+        while chunk := source.read(1024 * 1024):
+            written += len(chunk)
+            if written > MAX_AUDIO_MEMBER_BYTES:
+                raise ValueError(f"audio member exceeded extraction limit: {name}")
+            output.write(chunk)
+    try:
+        with wave.open(str(destination)) as audio:
+            sample_rate = audio.getframerate()
+            duration = audio.getnframes() / sample_rate if sample_rate else 0.0
+    except (EOFError, wave.Error) as error:
+        raise ValueError(f"invalid WAV member: {name}") from error
+    if duration <= 0 or duration > MAX_AUDIO_SECONDS:
+        raise ValueError(f"audio member has unsafe duration: {name}")
+    return duration
 
 
 def _reference(label_bytes: bytes) -> tuple[str, str]:
@@ -107,6 +156,9 @@ def evaluate_archives(
     model: str,
     device: str,
     compute_type: str,
+    requested_device: str | None = None,
+    initialization_fallback: str | None = None,
+    dataset_provenance: dict[str, object] | None = None,
     limit: int | None = None,
     expected_records: int | None = EXPECTED_EVALUATION_RECORDS,
     progress: Callable[[int, int], None] | None = None,
@@ -123,11 +175,16 @@ def evaluate_archives(
         if set(audio_members) != set(label_members):
             raise ValueError("audio/label archive mismatch")
         available_record_count = len(stems)
-        if limit is None and expected_records is not None:
-            if available_record_count != expected_records:
+        manifest_record_count = (
+            int(dataset_provenance["record_count"])
+            if dataset_provenance is not None
+            else expected_records
+        )
+        if limit is None and manifest_record_count is not None:
+            if available_record_count != manifest_record_count:
                 raise ValueError(
                     "fixed evaluation record count mismatch: "
-                    f"expected={expected_records}, actual={available_record_count}"
+                    f"expected={manifest_record_count}, actual={available_record_count}"
                 )
         if limit is not None:
             stems = stems[:limit]
@@ -137,9 +194,15 @@ def evaluate_archives(
         rows: list[dict[str, object]] = []
         hotwords = " ".join(terms)
         for index, stem in enumerate(stems):
-            record_key, reference = _reference(label_zip.read(label_members[stem]))
+            record_key, reference = _reference(
+                _read_bounded(
+                    label_zip, label_members[stem], MAX_LABEL_MEMBER_BYTES
+                )
+            )
             audio_path = Path(directory) / f"record-{index:04d}.wav"
-            audio_path.write_bytes(audio_zip.read(audio_members[stem]))
+            input_audio_seconds = _extract_audio_bounded(
+                audio_zip, audio_members[stem], audio_path
+            )
             order = VARIANTS if index % 2 == 0 else tuple(reversed(VARIANTS))
             for variant in order:
                 started = time.perf_counter()
@@ -150,7 +213,7 @@ def evaluate_archives(
                     status = "completed"
                     error_type = None
                 except Exception as error:  # keep failed records in the denominator
-                    transcript = Transcript("", (), 0.0, 0.0)
+                    transcript = Transcript("", (), input_audio_seconds, 0.0)
                     status = "failed"
                     error_type = type(error).__name__
                 elapsed = time.perf_counter() - started
@@ -183,11 +246,13 @@ def evaluate_archives(
     record_metrics: dict[str, list[RecordMetric]] = {}
     for variant, variant_rows in by_variant.items():
         aggregates[variant], record_metrics[variant] = _aggregate(variant_rows, terms)
-    is_fixed_evaluation = limit is None and (
-        expected_records is None or len(stems) == expected_records
+    is_fixed_evaluation = (
+        limit is None
+        and dataset_provenance is not None
+        and len(stems) == int(dataset_provenance["record_count"])
     )
     experiment_id = (
-        EVALUATION_ID
+        str(dataset_provenance["evaluation_id"])
         if is_fixed_evaluation
         else f"speech_aihub119_gwangju_fire_smoke_{len(stems)}"
     )
@@ -199,7 +264,12 @@ def evaluate_archives(
         or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "evidence_scope": "AIHub 119 emergency-call proxy; not field-radio validation",
         "dataset": {
-            "id": "aihub_71768_gwangju_fire",
+            **(dataset_provenance or {}),
+            "id": (
+                dataset_provenance.get("dataset_id")
+                if dataset_provenance
+                else "unbound_fixture"
+            ),
             "split": "Validation",
             "record_count": len(stems),
         },
@@ -207,8 +277,10 @@ def evaluate_archives(
             "implementation": "faster-whisper",
             "version": "1.2.1",
             "model": model,
+            "requested_device": requested_device or device,
             "device": device,
             "compute_type": compute_type,
+            "initialization_fallback": initialization_fallback,
             "language": "ko (configured, not detected)",
             "beam_size": 5,
             "temperature": 0.0,

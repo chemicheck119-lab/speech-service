@@ -47,12 +47,15 @@ python -m pip install .
 chemicheck119-speech-eval \
   --audio-archive /secure/VS_광주_화재.zip \
   --label-archive /secure/VL_광주_화재.zip \
+  --dataset-manifest /secure/aihub-71768-gwangju-fire-validation.json \
   --hotwords-file config/domain_hotwords.txt \
   --model small --device cpu --compute-type int8 \
   --output-dir outputs
 ```
 
 `records.private.jsonl`에는 참조·가설 전사문이 들어가므로 비공개 버킷에만 저장합니다. 콘솔에는 진행 건수와 최종 위치만 출력합니다.
+
+고정 평가 ID는 manifest의 데이터 버전·77건 선언과 두 ZIP의 SHA-256이 모두 일치할 때만 부여됩니다. ZIP 멤버는 WAV 32MiB, 라벨 4MiB, 압축비 200배, 음성 300초로 제한합니다. GPU 초기화가 실패하면 CPU int8로 안전하게 전환하고 실제 device와 오류 유형을 결과에 기록합니다.
 
 ## 기본 검증
 

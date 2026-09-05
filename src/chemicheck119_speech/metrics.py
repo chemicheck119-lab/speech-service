@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 import random
 import re
-import statistics
 import unicodedata
 
 
@@ -115,11 +114,14 @@ def paired_bootstrap_cer_delta(
         denominator = max(1, reference_length)
         deltas.append((hinted_edits - baseline_edits) / denominator)
     deltas.sort()
+    baseline_edits = sum(metric.character_edits for metric in baseline)
+    hinted_edits = sum(metric.character_edits for metric in hinted)
+    reference_length = sum(metric.reference_characters for metric in baseline)
     low = deltas[int(samples * 0.025)]
     high = deltas[min(samples - 1, int(samples * 0.975))]
     return {
         "metric": "hinted_cer_minus_baseline_cer",
-        "estimate": statistics.fmean(deltas),
+        "estimate": (hinted_edits - baseline_edits) / max(1, reference_length),
         "ci95_low": low,
         "ci95_high": high,
         "samples": samples,

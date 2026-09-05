@@ -8,7 +8,11 @@ import unittest
 import wave
 import zipfile
 
-from chemicheck119_speech.evaluation import evaluate_archives, load_hotwords
+from chemicheck119_speech.evaluation import (
+    _read_bounded,
+    evaluate_archives,
+    load_hotwords,
+)
 from chemicheck119_speech.runtime import Transcript, TranscriptSegment
 
 
@@ -30,6 +34,15 @@ class FakeTranscriber:
 
 
 class EvaluationTest(unittest.TestCase):
+    def test_rejects_archive_member_above_expanded_size_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            archive_path = Path(directory) / "payload.zip"
+            with zipfile.ZipFile(archive_path, "w") as archive:
+                archive.writestr("payload.json", b"0123456789")
+            with zipfile.ZipFile(archive_path) as archive:
+                with self.assertRaisesRegex(ValueError, "expanded size"):
+                    _read_bounded(archive, "payload.json", 5)
+
     def test_load_hotwords_rejects_duplicates(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "terms.txt"
@@ -69,12 +82,20 @@ class EvaluationTest(unittest.TestCase):
                 model="fixture",
                 device="cpu",
                 compute_type="int8",
-                expected_records=None,
+                dataset_provenance={
+                    "dataset_id": "fixture",
+                    "dataset_version": "1",
+                    "evaluation_id": "fixture-evaluation",
+                    "record_count": 2,
+                    "manifest_sha256": "a" * 64,
+                    "archive_sha256": {},
+                },
                 generated_at="2026-09-05T00:00:00Z",
             )
             self.assertEqual(4, len(rows))
             self.assertEqual(2, summary["dataset"]["record_count"])
             self.assertEqual("evaluation", summary["usage_role"])
+            self.assertEqual("fixture-evaluation", summary["experiment_id"])
             self.assertGreater(
                 summary["variants"]["baseline"]["cer"],
                 summary["variants"]["hotwords"]["cer"],

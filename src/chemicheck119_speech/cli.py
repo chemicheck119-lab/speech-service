@@ -10,6 +10,7 @@ from pathlib import Path
 import tempfile
 
 from .evaluation import evaluate_archives, load_hotwords
+from .provenance import validate_evaluation_manifest
 from .runtime import FasterWhisperTranscriber
 from .storage import materialize, upload_file
 
@@ -36,6 +37,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--audio-archive", required=True)
     parser.add_argument("--label-archive", required=True)
+    parser.add_argument("--dataset-manifest", required=True)
     parser.add_argument("--hotwords-file", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, default=Path("outputs"))
     parser.add_argument("--gcs-output-prefix")
@@ -59,10 +61,19 @@ def main(argv: list[str] | None = None) -> int:
         label_archive = materialize(
             args.label_archive, temporary / "validation-labels.zip"
         )
+        manifest_path = materialize(
+            args.dataset_manifest, temporary / "evaluation-manifest.json"
+        )
+        dataset_provenance = validate_evaluation_manifest(
+            manifest_path, audio_archive, label_archive
+        )
         transcriber = FasterWhisperTranscriber(
             model=args.model,
-            device=args.device,
-            compute_type=args.compute_type,
+            requested_device=args.device,
+            device=transcriber.actual_device,
+            compute_type=transcriber.actual_compute_type,
+            initialization_fallback=transcriber.initialization_fallback,
+            dataset_provenance=dataset_provenance,
             cpu_threads=args.cpu_threads,
             download_root=args.model_cache,
             local_files_only=args.local_files_only,

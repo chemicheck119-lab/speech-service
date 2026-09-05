@@ -37,6 +37,16 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertLess(first["estimate"], 0)
 
+    def test_bootstrap_estimate_matches_observed_aggregate_delta(self) -> None:
+        baseline = [score_record("가", "나"), score_record("가" * 100, "가" * 50)]
+        hinted = [score_record("가", "가"), score_record("가" * 100, "가" * 100)]
+        result = paired_bootstrap_cer_delta(baseline, hinted, samples=100, seed=119)
+        expected = (
+            sum(item.character_edits for item in hinted)
+            - sum(item.character_edits for item in baseline)
+        ) / sum(item.reference_characters for item in baseline)
+        self.assertEqual(expected, result["estimate"])
+
 
 if __name__ == "__main__":
     unittest.main()
