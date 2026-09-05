@@ -13,7 +13,7 @@
 ```
 
 - 이 저장소는 음성을 전사하지만 물질의 CAS를 확정하거나 위험을 판단하지 않습니다.
-- Parser·Resolver·Retriever·CAMEO 규칙은 `analysis-engine`의 책임입니다.
+- Parser·Resolver·Retriever·Agent·CAMEO 규칙은 `analysis-engine`의 책임입니다.
 - 인증·사고 상태·감사 기록은 `back`의 책임입니다.
 - 원본 음성과 모델 가중치는 Git에 저장하지 않습니다.
 
