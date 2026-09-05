@@ -69,11 +69,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         transcriber = FasterWhisperTranscriber(
             model=args.model,
-            requested_device=args.device,
-            device=transcriber.actual_device,
-            compute_type=transcriber.actual_compute_type,
-            initialization_fallback=transcriber.initialization_fallback,
-            dataset_provenance=dataset_provenance,
+            device=args.device,
+            compute_type=args.compute_type,
             cpu_threads=args.cpu_threads,
             download_root=args.model_cache,
             local_files_only=args.local_files_only,
@@ -88,8 +85,11 @@ def main(argv: list[str] | None = None) -> int:
             transcriber=transcriber,
             terms=terms,
             model=args.model,
-            device=args.device,
-            compute_type=args.compute_type,
+            requested_device=args.device,
+            device=transcriber.actual_device,
+            compute_type=transcriber.actual_compute_type,
+            initialization_fallback=transcriber.initialization_fallback,
+            dataset_provenance=dataset_provenance,
             limit=args.limit,
             progress=progress,
         )
