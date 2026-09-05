@@ -88,6 +88,16 @@ chemicheck119-speech-eval \
 집계값만으로 LoRA 실행을 결정하지 않습니다.
 
 ```bash
+chemicheck119-speech-capture-runtime-provenance \
+  --project PROJECT_ID --region asia-northeast3 \
+  --gwangju-execution chemicheck119-speech-eval-cpu-EXECUTION_ID \
+  --gwangju-summary /private/gwangju/summary.json \
+  --incheon-execution chemicheck119-speech-cross-region-cpu-EXECUTION_ID \
+  --incheon-summary /private/incheon/summary.json \
+  --seoul-execution chemicheck119-speech-seoul-cpu-EXECUTION_ID \
+  --seoul-summary /private/seoul/summary.json \
+  --output /private/cross-region-runtime-provenance.json
+
 chemicheck119-speech-cross-region-report \
   --gwangju-summary /private/gwangju/summary.json \
   --incheon-summary /private/incheon/summary.json \
@@ -101,7 +111,9 @@ chemicheck119-speech-cross-region-report \
 immutable container image digest와 summary SHA-256만 기록합니다. 평가기는 인천·서울이
 동일 image digest를 사용했고 각 summary가 해당 execution snapshot에 결합됐을 때만
 보고서를 만듭니다. 광주는 이미 관찰한 legacy 기준선이므로 image가 달라도 runtime 설정이
-같을 때 비교 기준으로만 사용합니다.
+같을 때 비교 기준으로만 사용합니다. 수집기는 완료·성공한 execution만 허용하고 `gcloud`
+응답을 메모리에서 allowlist 필드로 축소한 뒤 결과를 `0600` 권한으로 새로 생성합니다.
+원본 annotation·환경변수·계정 정보는 파일에 기록하지 않으며 기존 결과는 덮어쓰지 않습니다.
 
 비공개 레코드의 반복 오류를 확인할 때는 원문 대신 공개 우선용어별 누락·오삽입과 길이·
 CER·WER·RTF 분포만 집계합니다. 모델의 `avg_log_probability` 등은 보정된 정확도 확률이
