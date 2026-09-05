@@ -1,16 +1,10 @@
-"""Bind a fixed evaluation ID to manifest and archive content digests."""
+"""Bind an evaluation ID to a versioned manifest and archive digests."""
 
 from __future__ import annotations
 
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
-
-from .evaluation import EVALUATION_ID, EXPECTED_EVALUATION_RECORDS
-
-
-EXPECTED_DATASET_ID = "aihub_71768_gwangju_fire"
-
 
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
@@ -30,18 +24,24 @@ def validate_evaluation_manifest(
     evaluation = manifest.get("evaluation")
     if not isinstance(evaluation, dict):
         raise ValueError("evaluation manifest is missing evaluation metadata")
-    if evaluation.get("id") != EVALUATION_ID:
-        raise ValueError("unexpected fixed evaluation ID")
-    if evaluation.get("record_count") != EXPECTED_EVALUATION_RECORDS:
-        raise ValueError("unexpected fixed evaluation record count")
+    evaluation_id = evaluation.get("id")
+    if not isinstance(evaluation_id, str) or not evaluation_id.strip():
+        raise ValueError("evaluation ID must be declared")
+    record_count = evaluation.get("record_count")
+    if type(record_count) is not int or record_count <= 0:
+        raise ValueError("evaluation record count must be a positive integer")
     if manifest.get("usage_role") != "evaluation":
         raise ValueError("manifest usage_role must be evaluation")
-    if manifest.get("dataset_id") != EXPECTED_DATASET_ID:
-        raise ValueError("unexpected dataset ID")
+    dataset_id = manifest.get("dataset_id")
+    if not isinstance(dataset_id, str) or not dataset_id.strip():
+        raise ValueError("dataset ID must be declared")
     if not isinstance(manifest.get("dataset_version"), str) or not manifest[
         "dataset_version"
     ].strip():
         raise ValueError("dataset version must be declared")
+    inventory = manifest.get("inventory")
+    if isinstance(inventory, dict) and inventory.get("paired_count") != record_count:
+        raise ValueError("evaluation and inventory record counts do not match")
 
     artifacts = manifest.get("artifacts")
     if not isinstance(artifacts, list):
@@ -64,10 +64,10 @@ def validate_evaluation_manifest(
             raise ValueError(f"archive digest does not match manifest: {role}")
 
     return {
-        "dataset_id": manifest.get("dataset_id"),
+        "dataset_id": dataset_id,
         "dataset_version": manifest.get("dataset_version"),
-        "evaluation_id": evaluation["id"],
-        "record_count": evaluation["record_count"],
+        "evaluation_id": evaluation_id,
+        "record_count": record_count,
         "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
         "archive_sha256": observed,
     }

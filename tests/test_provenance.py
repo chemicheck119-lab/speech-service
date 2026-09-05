@@ -67,6 +67,38 @@ class ProvenanceTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "digest"):
                 validate_evaluation_manifest(manifest_path, audio, labels)
 
+    def test_accepts_a_versioned_cross_region_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            audio = root / "VS_서울_화재.zip"
+            labels = root / "VL_서울_화재.zip"
+            audio.write_bytes(b"seoul-audio")
+            labels.write_bytes(b"seoul-labels")
+            manifest = {
+                "dataset_id": "aihub_71768_seoul_fire",
+                "dataset_version": "dataset-71768-downloaded-2026-09-05",
+                "usage_role": "evaluation",
+                "evaluation": {
+                    "id": "speech_aihub119_seoul_fire_validation_900",
+                    "record_count": 900,
+                },
+                "inventory": {"paired_count": 900},
+                "artifacts": [
+                    {
+                        "path": "gs://private/VS_서울_화재.zip",
+                        "sha256": hashlib.sha256(b"seoul-audio").hexdigest(),
+                    },
+                    {
+                        "path": "gs://private/VL_서울_화재.zip",
+                        "sha256": hashlib.sha256(b"seoul-labels").hexdigest(),
+                    },
+                ],
+            }
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            result = validate_evaluation_manifest(manifest_path, audio, labels)
+            self.assertEqual("aihub_71768_seoul_fire", result["dataset_id"])
+
 
 if __name__ == "__main__":
     unittest.main()

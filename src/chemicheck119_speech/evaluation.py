@@ -163,9 +163,17 @@ def evaluate_archives(
     expected_records: int | None = EXPECTED_EVALUATION_RECORDS,
     progress: Callable[[int, int], None] | None = None,
     generated_at: str | None = None,
+    variants: tuple[str, ...] = VARIANTS,
 ) -> tuple[dict[str, object], list[dict[str, object]]]:
     if limit is not None and limit <= 0:
         raise ValueError("limit must be positive")
+    if not variants or len(variants) != len(set(variants)):
+        raise ValueError("variants must be unique and non-empty")
+    unsupported = set(variants) - set(VARIANTS)
+    if unsupported:
+        raise ValueError(f"unsupported variants: {sorted(unsupported)}")
+    if "hotwords" in variants and not terms:
+        raise ValueError("hotwords variant requires priority terms")
     with zipfile.ZipFile(audio_archive) as audio_zip, zipfile.ZipFile(
         label_archive
     ) as label_zip, tempfile.TemporaryDirectory() as directory:
@@ -203,7 +211,7 @@ def evaluate_archives(
             input_audio_seconds = _extract_audio_bounded(
                 audio_zip, audio_members[stem], audio_path
             )
-            order = VARIANTS if index % 2 == 0 else tuple(reversed(VARIANTS))
+            order = variants if index % 2 == 0 else tuple(reversed(variants))
             for variant in order:
                 started = time.perf_counter()
                 try:
@@ -240,7 +248,7 @@ def evaluate_archives(
             (row for row in rows if row["variant"] == variant),
             key=lambda row: str(row["record_key"]),
         )
-        for variant in VARIANTS
+        for variant in variants
     }
     aggregates: dict[str, dict[str, object]] = {}
     record_metrics: dict[str, list[RecordMetric]] = {}
@@ -254,7 +262,15 @@ def evaluate_archives(
     experiment_id = (
         str(dataset_provenance["evaluation_id"])
         if is_fixed_evaluation
-        else f"speech_aihub119_gwangju_fire_smoke_{len(stems)}"
+        else (
+            "speech_"
+            + str(
+                (dataset_provenance or {}).get(
+                    "dataset_id", "aihub119_gwangju_fire"
+                )
+            )
+            + f"_smoke_{len(stems)}"
+        )
     )
     summary: dict[str, object] = {
         "schema_version": "1.0.0",
@@ -272,6 +288,7 @@ def evaluate_archives(
             ),
             "split": "Validation",
             "record_count": len(stems),
+            "expected_record_count": manifest_record_count,
         },
         "runtime": {
             "implementation": "faster-whisper",
@@ -286,15 +303,17 @@ def evaluate_archives(
             "temperature": 0.0,
             "vad_filter": True,
             "condition_on_previous_text": False,
+            "variants": list(variants),
         },
         "variants": aggregates,
-        "paired_comparison": paired_bootstrap_cer_delta(
-            record_metrics["baseline"], record_metrics["hotwords"]
-        ),
         "priority_terms": terms,
         "quality_signal_note": (
             "segment avg_log_probability is an uncalibrated decoding score, "
             "not a correctness probability"
         ),
     }
+    if "baseline" in record_metrics and "hotwords" in record_metrics:
+        summary["paired_comparison"] = paired_bootstrap_cer_delta(
+            record_metrics["baseline"], record_metrics["hotwords"]
+        )
     return summary, rows

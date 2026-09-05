@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 import tempfile
 
-from .evaluation import evaluate_archives, load_hotwords
+from .evaluation import VARIANTS, evaluate_archives, load_hotwords
 from .provenance import validate_evaluation_manifest
 from .runtime import FasterWhisperTranscriber
 from .storage import materialize, upload_file
@@ -38,7 +38,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--audio-archive", required=True)
     parser.add_argument("--label-archive", required=True)
     parser.add_argument("--dataset-manifest", required=True)
-    parser.add_argument("--hotwords-file", type=Path, required=True)
+    parser.add_argument("--hotwords-file", type=Path)
+    parser.add_argument(
+        "--variants",
+        nargs="+",
+        choices=VARIANTS,
+        default=list(VARIANTS),
+        help="평가할 추론 조건. 교차지역 기준선은 baseline만 사용합니다.",
+    )
     parser.add_argument("--output-dir", type=Path, default=Path("outputs"))
     parser.add_argument("--gcs-output-prefix")
     parser.add_argument("--model", default=os.environ.get("WHISPER_MODEL", "small"))
@@ -52,7 +59,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.cpu_threads <= 0:
         parser.error("--cpu-threads must be positive")
 
-    terms = load_hotwords(args.hotwords_file)
+    terms = load_hotwords(args.hotwords_file) if args.hotwords_file else []
+    if "hotwords" in args.variants and not terms:
+        parser.error("hotwords variant requires --hotwords-file")
     with tempfile.TemporaryDirectory() as directory:
         temporary = Path(directory)
         audio_archive = materialize(
@@ -92,6 +101,7 @@ def main(argv: list[str] | None = None) -> int:
             dataset_provenance=dataset_provenance,
             limit=args.limit,
             progress=progress,
+            variants=tuple(args.variants),
         )
     summary_path, records_path = _write_results(args.output_dir, summary, rows)
     uploaded: list[str] = []

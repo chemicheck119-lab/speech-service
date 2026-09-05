@@ -61,6 +61,26 @@ chemicheck119-speech-eval \
 
 고정 77건 평가에서는 기본 전사의 CER가 43.75%, hotword 조건이 56.28%였습니다. hotword는 우선 용어 재현율을 높였지만 실제로 없던 용어 삽입을 크게 늘려 기본값에서 제외했습니다. 수치의 정의, 실행 해시, 제한 사항은 [AIHub 광주 화재 음성 평가 보고서](docs/AIHUB_광주_화재_음성_평가.md)에 기록했습니다.
 
+## 교차지역 기준선 평가
+
+서울·인천 화재 Validation은 광주에서 고정한 설정을 바꾸지 않고 `baseline`만 실행합니다.
+지역별 manifest의 ID·건수·archive SHA-256을 검증하며, 광주에서 기각한 hotword를 다시
+실행해 비용과 선택 편향을 늘리지 않습니다. 우선용어 파일은 평가 지표 계산에만 사용됩니다.
+
+```bash
+chemicheck119-speech-eval \
+  --audio-archive gs://PRIVATE_BUCKET/raw/aihub/71768/seoul-fire/VS_서울_화재.zip \
+  --label-archive gs://PRIVATE_BUCKET/raw/aihub/71768/seoul-fire/VL_서울_화재.zip \
+  --dataset-manifest gs://PRIVATE_BUCKET/manifests/aihub-71768-seoul-fire-validation.json \
+  --hotwords-file config/domain_hotwords.txt \
+  --variants baseline \
+  --model small --device cpu --compute-type int8 \
+  --output-dir outputs
+```
+
+교차지역 결과도 신고접수 전화 성능이며 현장 무전 성능이 아닙니다. 자세한 사전 계획과
+채택 기준은 [교차지역 STT 평가 계획](docs/교차지역_STT_평가_계획.md)에 기록합니다.
+
 ## 기본 검증
 
 ```bash

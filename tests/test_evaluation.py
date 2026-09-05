@@ -34,6 +34,43 @@ class FakeTranscriber:
 
 
 class EvaluationTest(unittest.TestCase):
+    def test_can_run_a_baseline_only_cross_region_evaluation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            audio = root / "audio.zip"
+            labels = root / "labels.zip"
+            with zipfile.ZipFile(audio, "w") as archive:
+                archive.writestr("record-a.wav", wav_bytes())
+            label = {
+                "recordId": "seoul-record-a",
+                "utterances": [
+                    {"startAt": 0, "endAt": 100, "text": "가스 누출"}
+                ],
+            }
+            with zipfile.ZipFile(labels, "w") as archive:
+                archive.writestr(
+                    "record-a.json", json.dumps(label, ensure_ascii=False)
+                )
+            summary, rows = evaluate_archives(
+                audio_archive=audio,
+                label_archive=labels,
+                transcriber=FakeTranscriber(),
+                terms=["가스"],
+                model="small",
+                device="cpu",
+                compute_type="int8",
+                dataset_provenance={
+                    "dataset_id": "aihub_71768_seoul_fire",
+                    "dataset_version": "v1",
+                    "evaluation_id": "speech_aihub119_seoul_fire_validation_1",
+                    "record_count": 1,
+                },
+                variants=("baseline",),
+            )
+            self.assertEqual(["baseline"], summary["runtime"]["variants"])
+            self.assertNotIn("paired_comparison", summary)
+            self.assertEqual(1, len(rows))
+
     def test_rejects_archive_member_above_expanded_size_limit(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             archive_path = Path(directory) / "payload.zip"
