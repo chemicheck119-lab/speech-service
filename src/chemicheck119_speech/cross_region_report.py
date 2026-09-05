@@ -7,10 +7,17 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+import re
 from typing import Any
 
 
-SCHEMA_VERSION = "speech-cross-region-comparison-v1"
+SCHEMA_VERSION = "speech-cross-region-comparison-v2"
+RUNTIME_PROVENANCE_SCHEMA_VERSION = "speech-cross-region-runtime-provenance-v1"
+MAX_RUNTIME_PROVENANCE_BYTES = 64 * 1024
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+CONTAINER_DIGEST_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
+GIT_COMMIT_PATTERN = re.compile(r"^[0-9a-f]{40}$")
+RESOURCE_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9-]{0,126}$")
 EXPECTED_RUNTIME = {
     "implementation": "faster-whisper",
     "version": "1.2.1",
@@ -30,6 +37,11 @@ EXPECTED_EVALUATIONS = {
     "seoul": ("speech_aihub_71768_seoul_fire_validation_965", 965),
 }
 CROSS_REGIONS = ("incheon", "seoul")
+EXPECTED_JOBS = {
+    "gwangju": "chemicheck119-speech-eval-cpu",
+    "incheon": "chemicheck119-speech-cross-region-cpu",
+    "seoul": "chemicheck119-speech-seoul-cpu",
+}
 RTF_MAXIMUM = 0.5
 TERM_PRECISION_MINIMUM = 0.95
 FALSE_INSERTION_RATE_MAXIMUM = 0.01
@@ -46,6 +58,83 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _aware_timestamp(value: Any, label: str) -> datetime:
+    if not isinstance(value, str) or not value:
+        raise CrossRegionReportError(f"{label} timestamp is missing")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise CrossRegionReportError(f"{label} timestamp is invalid") from error
+    if parsed.tzinfo is None:
+        raise CrossRegionReportError(f"{label} timestamp must include a timezone")
+    return parsed
+
+
+def load_runtime_provenance(
+    path: Path, *, summary_paths: dict[str, Path]
+) -> dict[str, Any]:
+    """비식별 Cloud Run execution snapshot을 summary hash와 결합 검증한다."""
+
+    size = path.stat().st_size
+    if size <= 0 or size > MAX_RUNTIME_PROVENANCE_BYTES:
+        raise CrossRegionReportError(
+            f"runtime provenance size is outside the allowed range: {size}"
+        )
+    provenance = json.loads(path.read_text(encoding="utf-8"))
+    regions = provenance.get("regions") if isinstance(provenance, dict) else None
+    if (
+        not isinstance(provenance, dict)
+        or provenance.get("schema_version") != RUNTIME_PROVENANCE_SCHEMA_VERSION
+        or provenance.get("source") != "gcloud run jobs executions describe"
+        or not isinstance(regions, dict)
+        or set(regions) != set(EXPECTED_EVALUATIONS)
+        or set(summary_paths) != set(EXPECTED_EVALUATIONS)
+    ):
+        raise CrossRegionReportError("runtime provenance contract is invalid")
+    captured_at = _aware_timestamp(provenance.get("captured_at"), "capture")
+
+    for region, expected_job in EXPECTED_JOBS.items():
+        item = regions.get(region)
+        if not isinstance(item, dict):
+            raise CrossRegionReportError(f"{region} runtime provenance is missing")
+        execution_name = item.get("execution_name")
+        job_name = item.get("job_name")
+        digest = item.get("container_image_digest")
+        summary_digest = item.get("summary_sha256")
+        if (
+            not isinstance(execution_name, str)
+            or not RESOURCE_NAME_PATTERN.fullmatch(execution_name)
+            or not execution_name.startswith(f"{expected_job}-")
+            or job_name != expected_job
+            or not isinstance(digest, str)
+            or not CONTAINER_DIGEST_PATTERN.fullmatch(digest)
+            or not isinstance(summary_digest, str)
+            or not SHA256_PATTERN.fullmatch(summary_digest)
+            or summary_digest != sha256_file(summary_paths[region])
+            or item.get("completion_succeeded") is not True
+        ):
+            raise CrossRegionReportError(
+                f"{region} runtime provenance does not match the fixed execution"
+            )
+        start_time = _aware_timestamp(item.get("start_time"), f"{region} start")
+        completion_time = _aware_timestamp(
+            item.get("completion_time"), f"{region} completion"
+        )
+        if completion_time < start_time or captured_at < completion_time:
+            raise CrossRegionReportError(
+                f"{region} runtime provenance timestamps are inconsistent"
+            )
+
+    cross_digests = {
+        regions[region]["container_image_digest"] for region in CROSS_REGIONS
+    }
+    if len(cross_digests) != 1:
+        raise CrossRegionReportError(
+            "incheon and seoul must use the same immutable container image"
+        )
+    return provenance
 
 
 def _load_summary(path: Path, region: str) -> dict[str, Any]:
@@ -166,6 +255,8 @@ def build_cross_region_report(
     gwangju_summary_path: Path,
     incheon_summary_path: Path,
     seoul_summary_path: Path,
+    runtime_provenance_path: Path,
+    evaluator_git_commit: str,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
     paths = {
@@ -173,7 +264,12 @@ def build_cross_region_report(
         "incheon": incheon_summary_path,
         "seoul": seoul_summary_path,
     }
+    if not GIT_COMMIT_PATTERN.fullmatch(evaluator_git_commit):
+        raise CrossRegionReportError("evaluator Git commit must be a full SHA-1")
     summaries = {region: _load_summary(path, region) for region, path in paths.items()}
+    runtime_provenance = load_runtime_provenance(
+        runtime_provenance_path, summary_paths=paths
+    )
     priority_terms = {
         region: tuple(summary["priority_terms"])
         for region, summary in summaries.items()
@@ -212,8 +308,26 @@ def build_cross_region_report(
             region: {
                 "summary_sha256": sha256_file(path),
                 "evaluation_id": EXPECTED_EVALUATIONS[region][0],
+                "cloud_run_execution": runtime_provenance["regions"][region][
+                    "execution_name"
+                ],
+                "container_image_digest": runtime_provenance["regions"][region][
+                    "container_image_digest"
+                ],
             }
             for region, path in paths.items()
+        },
+        "runtime_provenance_sha256": sha256_file(runtime_provenance_path),
+        "evaluation_runtime": {
+            "repository": "chemicheck119-lab/speech-service",
+            "git_commit": evaluator_git_commit,
+        },
+        "comparability_gate": {
+            "passed": True,
+            "summary_hashes_bound_to_executions": True,
+            "incheon_seoul_same_container_image": True,
+            "gwangju_is_observed_legacy_baseline": True,
+            "gwangju_image_may_differ": True,
         },
         "schema_compatibility": {
             "gwangju_missing_expected_record_count": (
@@ -264,6 +378,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--gwangju-summary", type=Path, required=True)
     parser.add_argument("--incheon-summary", type=Path, required=True)
     parser.add_argument("--seoul-summary", type=Path, required=True)
+    parser.add_argument("--runtime-provenance", type=Path, required=True)
+    parser.add_argument("--evaluator-git-commit", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--generated-at")
     args = parser.parse_args(argv)
@@ -273,6 +389,8 @@ def main(argv: list[str] | None = None) -> int:
         gwangju_summary_path=args.gwangju_summary,
         incheon_summary_path=args.incheon_summary,
         seoul_summary_path=args.seoul_summary,
+        runtime_provenance_path=args.runtime_provenance,
+        evaluator_git_commit=args.evaluator_git_commit,
         generated_at=args.generated_at,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)

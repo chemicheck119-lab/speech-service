@@ -10,6 +10,7 @@ from chemicheck119_speech.cross_region_report import (
     EXPECTED_EVALUATIONS,
     EXPECTED_RUNTIME,
     build_cross_region_report,
+    sha256_file,
 )
 
 
@@ -78,18 +79,69 @@ class CrossRegionReportTest(unittest.TestCase):
             paths[region] = path
         return paths
 
+    def _runtime_provenance(
+        self,
+        root: Path,
+        paths: dict[str, Path],
+        *,
+        seoul_digest: str | None = None,
+    ) -> Path:
+        cross_digest = "sha256:" + "2" * 64
+        payload = {
+            "schema_version": "speech-cross-region-runtime-provenance-v1",
+            "captured_at": "2026-09-05T06:00:00Z",
+            "source": "gcloud run jobs executions describe",
+            "regions": {
+                "gwangju": {
+                    "execution_name": "chemicheck119-speech-eval-cpu-abcde",
+                    "job_name": "chemicheck119-speech-eval-cpu",
+                    "container_image_digest": "sha256:" + "1" * 64,
+                    "start_time": "2026-09-05T00:00:00Z",
+                    "completion_time": "2026-09-05T01:00:00Z",
+                    "completion_succeeded": True,
+                    "summary_sha256": sha256_file(paths["gwangju"]),
+                },
+                "incheon": {
+                    "execution_name": "chemicheck119-speech-cross-region-cpu-abcde",
+                    "job_name": "chemicheck119-speech-cross-region-cpu",
+                    "container_image_digest": cross_digest,
+                    "start_time": "2026-09-05T02:00:00Z",
+                    "completion_time": "2026-09-05T03:00:00Z",
+                    "completion_succeeded": True,
+                    "summary_sha256": sha256_file(paths["incheon"]),
+                },
+                "seoul": {
+                    "execution_name": "chemicheck119-speech-seoul-cpu-abcde",
+                    "job_name": "chemicheck119-speech-seoul-cpu",
+                    "container_image_digest": seoul_digest or cross_digest,
+                    "start_time": "2026-09-05T04:00:00Z",
+                    "completion_time": "2026-09-05T05:00:00Z",
+                    "completion_succeeded": True,
+                    "summary_sha256": sha256_file(paths["seoul"]),
+                },
+            },
+        }
+        path = root / "runtime-provenance.json"
+        path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        return path
+
+    def _build(self, root: Path, paths: dict[str, Path]) -> dict:
+        return build_cross_region_report(
+            gwangju_summary_path=paths["gwangju"],
+            incheon_summary_path=paths["incheon"],
+            seoul_summary_path=paths["seoul"],
+            runtime_provenance_path=self._runtime_provenance(root, paths),
+            evaluator_git_commit="f" * 40,
+            generated_at="2026-09-05T00:00:00Z",
+        )
+
     def test_builds_fixed_comparison_and_keeps_lora_on_hold(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             paths = self._paths(
                 Path(directory),
                 {region: self._summary(region) for region in EXPECTED_EVALUATIONS},
             )
-            report = build_cross_region_report(
-                gwangju_summary_path=paths["gwangju"],
-                incheon_summary_path=paths["incheon"],
-                seoul_summary_path=paths["seoul"],
-                generated_at="2026-09-05T00:00:00Z",
-            )
+            report = self._build(Path(directory), paths)
 
         self.assertTrue(report["cross_region_gate"]["passed"])
         self.assertEqual(
@@ -104,6 +156,10 @@ class CrossRegionReportTest(unittest.TestCase):
         self.assertTrue(
             report["schema_compatibility"]["gwangju_missing_expected_record_count"]
         )
+        self.assertTrue(
+            report["comparability_gate"]["incheon_seoul_same_container_image"]
+        )
+        self.assertEqual("f" * 40, report["evaluation_runtime"]["git_commit"])
         self.assertIn("CAS", report["claims_not_allowed"][1])
 
     def test_false_insertion_rate_uses_term_negative_opportunities(self) -> None:
@@ -113,11 +169,7 @@ class CrossRegionReportTest(unittest.TestCase):
             }
             summaries["incheon"] = self._summary("incheon", false_insertion=3)
             paths = self._paths(Path(directory), summaries)
-            report = build_cross_region_report(
-                gwangju_summary_path=paths["gwangju"],
-                incheon_summary_path=paths["incheon"],
-                seoul_summary_path=paths["seoul"],
-            )
+            report = self._build(Path(directory), paths)
 
         terms = report["regions"]["incheon"]["priority_terms"]
         self.assertEqual(3, terms["false_insertion"])
@@ -134,11 +186,7 @@ class CrossRegionReportTest(unittest.TestCase):
             summaries["seoul"] = self._summary("seoul", terms=["다른용어"])
             paths = self._paths(Path(directory), summaries)
             with self.assertRaisesRegex(CrossRegionReportError, "priority terms"):
-                build_cross_region_report(
-                    gwangju_summary_path=paths["gwangju"],
-                    incheon_summary_path=paths["incheon"],
-                    seoul_summary_path=paths["seoul"],
-                )
+                self._build(Path(directory), paths)
 
     def test_rejects_hotword_cross_region_run(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -148,10 +196,46 @@ class CrossRegionReportTest(unittest.TestCase):
             summaries["seoul"] = self._summary("seoul", add_cross_region_hotwords=True)
             paths = self._paths(Path(directory), summaries)
             with self.assertRaisesRegex(CrossRegionReportError, "baseline-only"):
+                self._build(Path(directory), paths)
+
+    def test_rejects_different_cross_region_container_images(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            paths = self._paths(
+                root,
+                {region: self._summary(region) for region in EXPECTED_EVALUATIONS},
+            )
+            provenance = self._runtime_provenance(
+                root, paths, seoul_digest="sha256:" + "3" * 64
+            )
+            with self.assertRaisesRegex(CrossRegionReportError, "same immutable"):
                 build_cross_region_report(
                     gwangju_summary_path=paths["gwangju"],
                     incheon_summary_path=paths["incheon"],
                     seoul_summary_path=paths["seoul"],
+                    runtime_provenance_path=provenance,
+                    evaluator_git_commit="f" * 40,
+                )
+
+    def test_rejects_summary_not_bound_to_execution_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            paths = self._paths(
+                root,
+                {region: self._summary(region) for region in EXPECTED_EVALUATIONS},
+            )
+            provenance = self._runtime_provenance(root, paths)
+            paths["seoul"].write_text(
+                json.dumps(self._summary("seoul", recall=0.7), ensure_ascii=False),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(CrossRegionReportError, "fixed execution"):
+                build_cross_region_report(
+                    gwangju_summary_path=paths["gwangju"],
+                    incheon_summary_path=paths["incheon"],
+                    seoul_summary_path=paths["seoul"],
+                    runtime_provenance_path=provenance,
+                    evaluator_git_commit="f" * 40,
                 )
 
 
