@@ -72,17 +72,11 @@ def _aware_timestamp(value: Any, label: str) -> datetime:
     return parsed
 
 
-def load_runtime_provenance(
-    path: Path, *, summary_paths: dict[str, Path]
+def validate_runtime_provenance(
+    provenance: Any, *, summary_paths: dict[str, Path]
 ) -> dict[str, Any]:
     """비식별 Cloud Run execution snapshot을 summary hash와 결합 검증한다."""
 
-    size = path.stat().st_size
-    if size <= 0 or size > MAX_RUNTIME_PROVENANCE_BYTES:
-        raise CrossRegionReportError(
-            f"runtime provenance size is outside the allowed range: {size}"
-        )
-    provenance = json.loads(path.read_text(encoding="utf-8"))
     regions = provenance.get("regions") if isinstance(provenance, dict) else None
     if (
         not isinstance(provenance, dict)
@@ -135,6 +129,19 @@ def load_runtime_provenance(
             "incheon and seoul must use the same immutable container image"
         )
     return provenance
+
+
+def load_runtime_provenance(
+    path: Path, *, summary_paths: dict[str, Path]
+) -> dict[str, Any]:
+    size = path.stat().st_size
+    if size <= 0 or size > MAX_RUNTIME_PROVENANCE_BYTES:
+        raise CrossRegionReportError(
+            f"runtime provenance size is outside the allowed range: {size}"
+        )
+    return validate_runtime_provenance(
+        json.loads(path.read_text(encoding="utf-8")), summary_paths=summary_paths
+    )
 
 
 def _load_summary(path: Path, region: str) -> dict[str, Any]:
