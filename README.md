@@ -105,6 +105,7 @@ chemicheck119-speech-failure-analysis \
   --records-private /private/incheon/records.private.jsonl \
   --summary /private/incheon/summary.json \
   --priority-terms config/domain_hotwords.txt \
+  --evaluator-revision "$(git rev-parse HEAD)" \
   --output /private/incheon/failure-analysis.json
 ```
 

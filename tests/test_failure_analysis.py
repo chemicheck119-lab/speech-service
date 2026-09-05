@@ -107,11 +107,25 @@ class FailureAnalysisTest(unittest.TestCase):
             metrics={"record_count": 1},
             summary_sha256="a" * 64,
             private_records_sha256="b" * 64,
+            evaluator_revision="b7269d938da79caf2304fe42cf699be1293d3d54",
             generated_at="2026-09-05T00:00:00Z",
         )
         self.assertFalse(report["privacy"]["transcripts_in_report"])
         self.assertFalse(report["privacy"]["record_keys_in_report"])
+        self.assertEqual(
+            "b7269d938da79caf2304fe42cf699be1293d3d54",
+            report["evaluator"]["git_revision"],
+        )
         self.assertIn("LoRA", report["claims_not_allowed"][2])
+
+        with self.assertRaisesRegex(FailureAnalysisError, "Git SHA"):
+            build_failure_report(
+                summary=loaded,
+                metrics={"record_count": 1},
+                summary_sha256="a" * 64,
+                private_records_sha256="b" * 64,
+                evaluator_revision="main",
+            )
 
 
 if __name__ == "__main__":
