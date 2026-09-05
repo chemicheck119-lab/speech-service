@@ -1,0 +1,30 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# Audio datasets and generated media
+data/
+artifacts/
+models/
+outputs/
+*.wav
+*.mp3
+*.flac
+*.m4a
+*.ogg
+
+# Model weights
+*.bin
+*.ckpt
+*.onnx
+*.pt
+*.pth
+*.safetensors
+
+.DS_Store

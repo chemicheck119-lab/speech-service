@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chemicheck119-speech"
+version = "0.1.0"
+description = "Speech recognition boundary for ChemiCheck119"
+requires-python = ">=3.11"
+
+[tool.setuptools.packages.find]
+where = ["src"]
