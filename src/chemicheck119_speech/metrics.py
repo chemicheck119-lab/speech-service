@@ -79,16 +79,22 @@ def term_presence_counts(
             false_positive += int(not in_reference and in_hypothesis)
     recall_denominator = true_positive + false_negative
     precision_denominator = true_positive + false_positive
+    recall = true_positive / recall_denominator if recall_denominator else None
+    precision = (
+        true_positive / precision_denominator if precision_denominator else None
+    )
+    f1 = (
+        2 * precision * recall / (precision + recall)
+        if precision is not None and recall is not None and precision + recall
+        else None
+    )
     return {
         "true_positive": true_positive,
         "false_negative": false_negative,
         "false_insertion": false_positive,
-        "recall": (
-            true_positive / recall_denominator if recall_denominator else None
-        ),
-        "precision": (
-            true_positive / precision_denominator if precision_denominator else None
-        ),
+        "recall": recall,
+        "precision": precision,
+        "f1": f1,
     }
 
 

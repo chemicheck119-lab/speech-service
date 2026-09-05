@@ -58,6 +58,8 @@ class CliTest(unittest.TestCase):
                         "cuda",
                         "--compute-type",
                         "float16",
+                        "--variants",
+                        "baseline",
                     ]
                 )
 
@@ -78,6 +80,7 @@ class CliTest(unittest.TestCase):
                 "CudaUnavailable", evaluation_arguments["initialization_fallback"]
             )
             self.assertEqual(provenance, evaluation_arguments["dataset_provenance"])
+            self.assertEqual(("baseline",), evaluation_arguments["variants"])
 
 
 if __name__ == "__main__":
