@@ -92,8 +92,16 @@ chemicheck119-speech-cross-region-report \
   --gwangju-summary /private/gwangju/summary.json \
   --incheon-summary /private/incheon/summary.json \
   --seoul-summary /private/seoul/summary.json \
+  --runtime-provenance /private/cross-region-runtime-provenance.json \
+  --evaluator-git-commit "$(git rev-parse HEAD)" \
   --output /private/cross-region-report.json
 ```
+
+`runtime-provenance`에는 지역별 Cloud Run execution 이름, 성공 상태, 시작·완료 시각,
+immutable container image digest와 summary SHA-256만 기록합니다. 평가기는 인천·서울이
+동일 image digest를 사용했고 각 summary가 해당 execution snapshot에 결합됐을 때만
+보고서를 만듭니다. 광주는 이미 관찰한 legacy 기준선이므로 image가 달라도 runtime 설정이
+같을 때 비교 기준으로만 사용합니다.
 
 비공개 레코드의 반복 오류를 확인할 때는 원문 대신 공개 우선용어별 누락·오삽입과 길이·
 CER·WER·RTF 분포만 집계합니다. 모델의 `avg_log_probability` 등은 보정된 정확도 확률이
