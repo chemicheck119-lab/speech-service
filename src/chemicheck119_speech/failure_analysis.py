@@ -20,6 +20,7 @@ SCHEMA_VERSION = "speech-failure-analysis-v1"
 MAX_INPUT_BYTES = 256 * 1024 * 1024
 MAX_INPUT_ROWS = 5_000
 RECORD_KEY_PATTERN = re.compile(r"^[0-9a-f]{16}$")
+GIT_REVISION_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 
 
 class FailureAnalysisError(RuntimeError):
@@ -279,8 +280,11 @@ def build_failure_report(
     metrics: dict[str, Any],
     summary_sha256: str,
     private_records_sha256: str,
+    evaluator_revision: str,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
+    if not GIT_REVISION_PATTERN.fullmatch(evaluator_revision):
+        raise FailureAnalysisError("evaluator revision must be a full 40-character Git SHA")
     return {
         "schema_version": SCHEMA_VERSION,
         "generated_at": generated_at
@@ -294,6 +298,10 @@ def build_failure_report(
             "summary_sha256": summary_sha256,
             "private_records_sha256": private_records_sha256,
             "private_records_committed_to_git": False,
+        },
+        "evaluator": {
+            "repository": "chemicheck119-lab/speech-service",
+            "git_revision": evaluator_revision,
         },
         "metrics": metrics,
         "privacy": {
@@ -317,6 +325,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--priority-terms", type=Path, required=True)
     parser.add_argument("--variant", default="baseline")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--evaluator-revision", required=True)
     parser.add_argument("--generated-at")
     args = parser.parse_args(argv)
     if args.output.exists():
@@ -335,6 +344,7 @@ def main(argv: list[str] | None = None) -> int:
         metrics=metrics,
         summary_sha256=sha256_file(args.summary),
         private_records_sha256=sha256_file(args.records_private),
+        evaluator_revision=args.evaluator_revision,
         generated_at=args.generated_at,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
