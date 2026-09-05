@@ -83,6 +83,18 @@ chemicheck119-speech-eval \
 교차지역 결과도 신고접수 전화 성능이며 현장 무전 성능이 아닙니다. 자세한 사전 계획과
 채택 기준은 [교차지역 STT 평가 계획](docs/교차지역_STT_평가_계획.md)에 기록합니다.
 
+세 지역의 고정 summary가 모두 준비된 뒤 다음 명령으로 설정 일치와 사전 등록 게이트를
+재현합니다. 이 보고서는 서로 다른 지역의 CER·WER 차이를 paired 변화로 해석하지 않고,
+집계값만으로 LoRA 실행을 결정하지 않습니다.
+
+```bash
+chemicheck119-speech-cross-region-report \
+  --gwangju-summary /private/gwangju/summary.json \
+  --incheon-summary /private/incheon/summary.json \
+  --seoul-summary /private/seoul/summary.json \
+  --output /private/cross-region-report.json
+```
+
 ## 모의 통신 왜곡 강건성 평가
 
 `data-pipeline`의 고정 `radio-sim-v1` 실행이 만든 clean 대조군과 17개 왜곡 조건을 동일

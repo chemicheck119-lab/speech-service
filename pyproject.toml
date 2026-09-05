@@ -15,6 +15,7 @@ dependencies = [
 [project.scripts]
 chemicheck119-speech-eval = "chemicheck119_speech.cli:main"
 chemicheck119-speech-robustness-eval = "chemicheck119_speech.robustness:main"
+chemicheck119-speech-cross-region-report = "chemicheck119_speech.cross_region_report:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
