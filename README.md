@@ -30,6 +30,7 @@
 | 실시간 스트리밍 API·패드 연동 | 설계·구현 전 |
 | Whisper tokenizer·data preflight | 구현·실행 완료 |
 | 제한 LoRA local MPS 학습 harness | 구현 완료·1차 FP16 실행 수치 불안정으로 기각 |
+| LoRA numeric smoke Gate | 구현 완료·FP32 master 조건 실행 전 |
 | LoRA A/B/C 변환 pipeline | 구현 완료·유효 adapter 부재로 실행 전 |
 | LoRA adapter·A/B/C 성능 평가 | 설계 완료·실행 전 |
 | 화학용어 사후 자동교정 | 미구현; 원문 보존 원칙상 현재 범위 제외 |
@@ -267,8 +268,22 @@ timestamp 구간만 8kHz→16kHz로 재표본화해 학습합니다. 임시 음�
 포함하지 않습니다. 2026-09-07 첫 FP16 MPS 실행은 25 step에서 `loss=12157.4975`,
 `grad_norm=NaN`을 보여 30 step에서 중단·기각했습니다. adapter와 training report는 생성되지
 않았고 추가 서버 비용은 0원입니다. 이 실패는 LoRA 자체의 효과를 기각한 결과가 아니라 해당
-수치 설정의 전체 실행을 기각한 결과입니다. 별도 FP32 smoke가 유한 loss·gradient와 LoRA
-parameter update를 확인하기 전에는 재실행하지 않습니다.
+수치 설정의 전체 실행을 기각한 결과입니다. 별도 FP32 master weight·FP16 autocast smoke가
+유한 loss·gradient와 LoRA parameter update를 확인하기 전에는 재실행하지 않습니다.
+
+numeric smoke는 전체 학습과 같은 batch·gradient accumulation·learning rate로 optimizer
+2 step만 실행합니다. 각 step에서 유한 gradient와 parameter를 검사하고, loss가 비유한 값이거나
+100을 넘으면 즉시 실패합니다. LoRA tensor가 실제 변경되고 표본 base tensor가 그대로인 것도
+확인합니다. 성공 보고서도 전체 학습을 자동 허용하거나 성능 향상을 증명하지 않습니다.
+
+```bash
+scripts/run_whisper_lora_mps_once.sh \
+  /private/venv/bin/python \
+  /private/gwangju-lora-artifacts-v1 \
+  /private/current-local-cost-quote.json \
+  /private/numeric-smoke-UNIQUE \
+  numeric-smoke
+```
 
 ### LoRA A/B/C 변환 pipeline
 

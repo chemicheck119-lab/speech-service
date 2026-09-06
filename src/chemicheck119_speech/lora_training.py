@@ -53,6 +53,7 @@ ALLOWED_TRAIN_METRICS = {
     "train_loss",
     "epoch",
 }
+MAX_PLAUSIBLE_TRAIN_LOSS = 100.0
 
 
 @dataclass(frozen=True)
@@ -634,6 +635,83 @@ def build_whisper_lora_config(
     )
 
 
+def assert_finite_trainable_gradients(model: object, torch_module: object) -> int:
+    """Fail before an optimizer step if any trainable gradient is absent or non-finite."""
+
+    checked = 0
+    for parameter in model.parameters():
+        if not parameter.requires_grad:
+            continue
+        if parameter.grad is None:
+            raise FloatingPointError("trainable parameter is missing a gradient")
+        if not bool(torch_module.isfinite(parameter.grad).all().item()):
+            raise FloatingPointError("non-finite LoRA gradient detected")
+        checked += 1
+    if checked == 0:
+        raise FloatingPointError("no trainable gradients were checked")
+    return checked
+
+
+def assert_finite_trainable_parameters(model: object, torch_module: object) -> int:
+    """Fail immediately if an optimizer step creates non-finite LoRA weights."""
+
+    checked = 0
+    for parameter in model.parameters():
+        if not parameter.requires_grad:
+            continue
+        if not bool(torch_module.isfinite(parameter).all().item()):
+            raise FloatingPointError("non-finite LoRA parameter detected")
+        checked += 1
+    if checked == 0:
+        raise FloatingPointError("no trainable parameters were checked")
+    return checked
+
+
+def build_finite_training_callback(
+    callback_base: type, torch_module: object
+) -> object:
+    """Create a Transformers callback without importing that optional dependency here."""
+
+    class FiniteTrainingCallback(callback_base):
+        def __init__(self) -> None:
+            super().__init__()
+            self.gradient_checks = 0
+            self.parameter_checks = 0
+            self.logged_losses: list[float] = []
+
+        def on_pre_optimizer_step(
+            self, args: object, state: object, control: object, **kwargs: object
+        ) -> None:
+            self.gradient_checks += assert_finite_trainable_gradients(
+                kwargs["model"], torch_module
+            )
+
+        def on_optimizer_step(
+            self, args: object, state: object, control: object, **kwargs: object
+        ) -> None:
+            self.parameter_checks += assert_finite_trainable_parameters(
+                kwargs["model"], torch_module
+            )
+
+        def on_log(
+            self, args: object, state: object, control: object, **kwargs: object
+        ) -> None:
+            logs = kwargs.get("logs")
+            if not isinstance(logs, dict) or "loss" not in logs:
+                return
+            loss = logs["loss"]
+            if (
+                not isinstance(loss, (int, float))
+                or isinstance(loss, bool)
+                or not math.isfinite(float(loss))
+                or float(loss) > MAX_PLAUSIBLE_TRAIN_LOSS
+            ):
+                raise FloatingPointError("training loss failed the numeric guard")
+            self.logged_losses.append(float(loss))
+
+    return FiniteTrainingCallback()
+
+
 def _install_deadline(seconds: int) -> Callable[[], None]:
     if not hasattr(signal, "SIGALRM"):
         raise RuntimeError(
@@ -696,6 +774,7 @@ def run_bounded_training(
         from transformers import (
             Seq2SeqTrainer,
             Seq2SeqTrainingArguments,
+            TrainerCallback,
             WhisperForConditionalGeneration,
             WhisperProcessor,
         )
@@ -771,7 +850,7 @@ def run_bounded_training(
         model = WhisperForConditionalGeneration.from_pretrained(
             str(base["id"]),
             revision=str(base["revision"]),
-            torch_dtype=torch.float16,
+            torch_dtype=torch.float32,
         )
         model.config.use_cache = False
         model.enable_input_require_grads()
@@ -800,7 +879,7 @@ def run_bounded_training(
             warmup_ratio=float(training["warmup_ratio"]),
             weight_decay=float(training["weight_decay"]),
             max_grad_norm=float(training["max_gradient_norm"]),
-            fp16=bool(training["fp16"]),
+            fp16=training["mixed_precision"] == "fp16",
             gradient_checkpointing=bool(training["gradient_checkpointing"]),
             gradient_checkpointing_kwargs={
                 "use_reentrant": bool(
@@ -810,7 +889,9 @@ def run_bounded_training(
             eval_strategy="no",
             save_strategy="no",
             logging_strategy="steps",
-            logging_steps=25,
+            logging_steps=1,
+            logging_first_step=True,
+            logging_nan_inf_filter=False,
             report_to=[],
             remove_unused_columns=False,
             dataloader_num_workers=int(execution["runtime"]["dataloader_num_workers"]),
@@ -825,12 +906,15 @@ def run_bounded_training(
         )
         torch.use_deterministic_algorithms(True)
         collator = WhisperDataCollator(processor, model.config.decoder_start_token_id)
+
+        finite_callback = build_finite_training_callback(TrainerCallback, torch)
         trainer = Seq2SeqTrainer(
             model=model,
             args=arguments,
             train_dataset=dataset,
             data_collator=collator,
             processing_class=processor,
+            callbacks=[finite_callback],
         )
         result = trainer.train()
 
@@ -880,6 +964,13 @@ def run_bounded_training(
                 "trainable_parameters": trainable,
                 "total_parameters": total,
                 "metrics": _clean_metrics(result.metrics),
+                "numeric_guard": {
+                    "parameter_dtype": training["parameter_dtype"],
+                    "mixed_precision": training["mixed_precision"],
+                    "gradient_tensor_checks": finite_callback.gradient_checks,
+                    "parameter_tensor_checks": finite_callback.parameter_checks,
+                    "logged_loss_checks": len(finite_callback.logged_losses),
+                },
             },
             "privacy": {
                 "contains_record_ids": False,
