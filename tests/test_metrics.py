@@ -3,6 +3,7 @@ import unittest
 from chemicheck119_speech.metrics import (
     normalize_text,
     paired_bootstrap_cer_delta,
+    paired_bootstrap_error_delta,
     score_record,
     term_presence_counts,
 )
@@ -46,6 +47,23 @@ class MetricsTest(unittest.TestCase):
             - sum(item.character_edits for item in baseline)
         ) / sum(item.reference_characters for item in baseline)
         self.assertEqual(expected, result["estimate"])
+
+    def test_generic_bootstrap_supports_paired_wer(self) -> None:
+        baseline = [score_record("가스 누출", "가스 유출")]
+        candidate = [score_record("가스 누출", "가스 누출")]
+        result = paired_bootstrap_error_delta(
+            baseline, candidate, metric="wer", samples=20, seed=119
+        )
+        self.assertEqual("candidate_wer_minus_baseline_wer", result["metric"])
+        self.assertEqual(-0.5, result["estimate"])
+
+    def test_generic_bootstrap_rejects_different_reference_denominators(self) -> None:
+        with self.assertRaisesRegex(ValueError, "denominator"):
+            paired_bootstrap_error_delta(
+                [score_record("가스", "가스")],
+                [score_record("가스 누출", "가스 누출")],
+                metric="cer",
+            )
 
 
 if __name__ == "__main__":

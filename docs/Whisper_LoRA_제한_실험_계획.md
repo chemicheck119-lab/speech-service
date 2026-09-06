@@ -184,3 +184,19 @@ commit·확인서·single-use authorization으로 전체 학습을 한 번 실�
 변환 보고서는 학습 commit과 변환기 commit, base revision, converter version, B·C artifact
 hash를 기록합니다. 변환 성공은 비교 가능성만 뜻하며 정확도·안전·채택 주장을 허용하지
 않습니다.
+
+## A/B/C clean 잠금 평가 판정
+
+세 model arm은 광주 화재 Validation 77건을 `baseline` 단일 조건·CPU int8로 각각 실행합니다.
+판정기는 다음을 만족해야만 비교 결과를 만듭니다.
+
+- conversion report의 A revision과 B·C artifact hash 일치
+- dataset manifest·audio·label SHA-256과 record pairing 동일
+- faster-whisper 1.2.1, beam 5, VAD on, 이전 문맥 off 등 runtime 동일
+- private record로 summary CER·WER·우선용어 지표 재계산
+- A↔B converter drift와 B↔C LoRA effect 분리
+- paired bootstrap CER·WER 차이와 false insertion 차이 기록
+
+A↔B CER·WER 절대 차이가 각각 0.5%p를 넘으면 비교 자체를 무효화하고 현재 기준선을
+유지합니다. B↔C clean CER 회귀 1%p, WER 회귀 1.5%p, false insertion 증가 0 조건을
+통과해도 `wind_snr0`와 downstream 안전 Gate로 진행할 수 있을 뿐 자동 채택은 금지됩니다.
