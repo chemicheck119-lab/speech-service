@@ -172,7 +172,7 @@ def validate_lora_tokenizer_preflight(
         "automatic_training_allowed": False,
         "training_eligible_by_token_limit": over_limit_count == 0,
         "next_gate": (
-            "reviewed GPU trainer and current cost quote"
+            "reviewed local MPS trainer and current zero-cost attestation"
             if over_limit_count == 0
             else "revise the pre-registered segment contract before any training"
         ),

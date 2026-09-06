@@ -17,10 +17,10 @@ from .lora_protocol import load_experiment_config
 EXECUTION_PROTOCOL_ID = "whisper-small-lora-gwangju-execution-v1"
 ARTIFACT_PROTOCOL_ID = "whisper-lora-clean-wind-snr0-v1"
 REGISTERED_EXECUTION_CONFIG_SHA256 = (
-    "ac2206e2cd7132ffd269e99e9703f0beaea4aa4a9ed88aed2c3a208f475d11f9"
+    "7c47b6bd15423263f189aa3bf2dea9ef0ef87bcc8f576ceb6241b016035d7d01"
 )
 EXPECTED_EXPERIMENT_CONFIG_SHA256 = (
-    "6ce59b3623290c98561cdfa5f0f046e170779519ffd3e3687d31d2ae35d78c94"
+    "273284641b807936bd333c90e4e0e697e443c8caf3055efe7404348cf9ad663d"
 )
 EXPECTED_SOURCE_MANIFEST_SHA256 = (
     "ad56d29958069719651b4f73c37fd29a79d5edcf03bfc9adac6a05b20fc1272b"
@@ -234,20 +234,36 @@ def _load_execution_config(path: Path) -> tuple[dict[str, object], bytes]:
         raise ValueError("segment contract does not match")
     runtime = _object(config.get("runtime"), "runtime config")
     if (
-        runtime.get("gpu_count") != 1
-        or runtime.get("max_instances") != 1
-        or runtime.get("max_runtime_seconds") != 10800
-        or runtime.get("external_timeout_seconds") != 9900
-        or runtime.get("internal_deadline_seconds") != 9600
+        runtime.get("provider") != "local_owned_hardware"
+        or runtime.get("location") != "local"
+        or runtime.get("architecture") != "arm64"
+        or runtime.get("python_major_minor") != "3.11"
+        or runtime.get("accelerator_backend") != "mps"
+        or runtime.get("machine_type") != "apple-m4"
+        or runtime.get("gpu_type") != "apple-mps"
+        or runtime.get("gpu_count") != 1
+        or runtime.get("vcpu_count") != 10
+        or runtime.get("memory_gib") != 24
+        or runtime.get("boot_disk_gib") != 0
+        or runtime.get("max_processes") != 1
+        or runtime.get("max_runtime_seconds") != 43200
+        or runtime.get("external_timeout_seconds") != 42900
+        or runtime.get("internal_deadline_seconds") != 42600
         or runtime.get("retry_count") != 0
-        or runtime.get("require_cuda") is not True
+        or runtime.get("require_mps") is not True
         or runtime.get("cpu_training_fallback") is not False
+        or runtime.get("dataloader_pin_memory") is not False
+        or runtime.get("gradient_checkpointing_use_reentrant") is not False
     ):
-        raise ValueError("runtime cost or CUDA boundary does not match")
+        raise ValueError("runtime cost or MPS boundary does not match")
     cost = _object(config.get("cost_guard"), "cost guard")
     if (
         cost.get("current_quote_required_before_gpu") is not True
         or cost.get("single_use_remote_claim_required") is not True
+        or cost.get("experiment_hard_cap_krw") != 0
+        or cost.get("compute_billing_ceiling_usd_per_hour") != 0
+        or cost.get("boot_disk_billing_ceiling_usd") != 0
+        or cost.get("network_transfer_billing_ceiling_usd") != 0
     ):
         raise ValueError("cost authorization boundary does not match")
     output = _object(config.get("private_output"), "private output config")
@@ -648,11 +664,11 @@ def validate_lora_data_preflight(
         },
         "limitations": [
             "speaker and cross-record incident overlap cannot be evaluated from provider labels",
-            "label token limits still require the pinned Whisper tokenizer at GPU runtime",
+            "label token limits still require the pinned Whisper tokenizer at accelerator runtime",
             "this is emergency-call development data with procedural wind, not field-radio evidence",
         ],
         "automatic_training_allowed": False,
-        "next_gate": "pinned tokenizer dry-run, reviewed GPU trainer, and current cost quote",
+        "next_gate": "pinned tokenizer dry-run, reviewed local MPS trainer, and current zero-cost attestation",
         "claim_scope": "data readiness only; no LoRA performance or field-radio claim",
     }
 

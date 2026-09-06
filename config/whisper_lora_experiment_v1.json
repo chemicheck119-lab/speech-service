@@ -97,15 +97,19 @@
     "preconfirmation_rule_execution_max": 0
   },
   "cost_guard": {
-    "gcp_region": "asia-northeast3",
-    "gpu_type": "nvidia-l4",
+    "runtime_profile": "local_mps",
+    "provider": "local_owned_hardware",
+    "accelerator_backend": "mps",
+    "gpu_type": "apple-mps",
     "gpu_count": 1,
-    "machine_type": "g2-standard-4",
-    "max_runtime_hours": 3,
-    "max_instances": 1,
+    "machine_type": "apple-m4",
+    "max_runtime_hours": 12,
+    "max_processes": 1,
     "retry_count": 0,
-    "experiment_hard_cap_krw": 20000,
+    "incremental_server_cost_krw": 0,
+    "experiment_hard_cap_krw": 0,
     "total_development_server_cap_krw": 70000,
+    "gcp_gpu_status": "blocked_global_quota_0",
     "automatic_training_allowed": false
   },
   "adoption": {
