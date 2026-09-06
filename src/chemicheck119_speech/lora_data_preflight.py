@@ -17,10 +17,10 @@ from .lora_protocol import load_experiment_config
 EXECUTION_PROTOCOL_ID = "whisper-small-lora-gwangju-execution-v1"
 ARTIFACT_PROTOCOL_ID = "whisper-lora-clean-wind-snr0-v1"
 REGISTERED_EXECUTION_CONFIG_SHA256 = (
-    "049b31d10808aeefb67d809d91000c193bad436da76fe0595cc54938356f0d16"
+    "4ae92e2bcff346af6559a84346b293e2dd86d364f1caf29b006c9cd9aa47283d"
 )
 EXPECTED_EXPERIMENT_CONFIG_SHA256 = (
-    "f550078ed71caca5c17f614e77880663a6eea02d384ac4a2ace2e72fa63c77d8"
+    "a97e0f7c8f9e3948f4e919e60f9a6707323c4fab89a4c2eea8f83b010ad4750a"
 )
 EXPECTED_SOURCE_MANIFEST_SHA256 = (
     "ad56d29958069719651b4f73c37fd29a79d5edcf03bfc9adac6a05b20fc1272b"
