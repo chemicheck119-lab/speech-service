@@ -28,6 +28,7 @@ from tests.test_lora_data_preflight import _fixture
 ROOT = Path(__file__).resolve().parents[1]
 EXECUTION_CONFIG = ROOT / "config" / "whisper_lora_execution_v1.json"
 EXPERIMENT_CONFIG = ROOT / "config" / "whisper_lora_experiment_v1.json"
+LOCAL_MPS_RUNNER = ROOT / "scripts" / "run_whisper_lora_mps_once.sh"
 RUNNER_REVISION = "a" * 40
 LORA_NUMERIC_RUNTIME_AVAILABLE = all(
     importlib.util.find_spec(package) is not None for package in ("numpy", "scipy")
@@ -37,7 +38,7 @@ LORA_NUMERIC_RUNTIME_AVAILABLE = all(
 def _quote(
     root: Path,
     *,
-    machine_hour: float = 0.706832276,
+    machine_hour: float = 0,
     hours_old: int = 0,
     authorized_revision: str = RUNNER_REVISION,
     cumulative_before: int = 50_000,
@@ -61,21 +62,21 @@ def _quote(
             "remote_claim_required": True,
         },
         "resource": {
-            "gcp_region": "asia-northeast3",
-            "machine_type": "g2-standard-4",
-            "gpu_type": "nvidia-l4",
+            "provider": "local_owned_hardware",
+            "location": "local",
+            "machine_type": "apple-m4",
+            "gpu_type": "apple-mps",
             "gpu_count": 1,
-            "vcpu_count": 4,
-            "memory_gib": 16,
-            "boot_disk_gib": 100,
-            "runtime_hours": 3.0,
+            "vcpu_count": 10,
+            "memory_gib": 24,
+            "boot_disk_gib": 0,
+            "runtime_hours": 12.0,
         },
         "pricing": {
-            "model": "accelerator_optimized_machine",
+            "model": "local_owned_hardware",
             "machine_usd_per_hour": machine_hour,
-            "boot_disk_usd_per_gib_month": 0.13,
+            "boot_disk_usd_per_gib_month": 0,
             "network_transfer_usd": 0,
-            "month_hours": 730,
         },
         "fx_krw_per_usd": 1400,
         "sources": [
@@ -109,24 +110,19 @@ def _claim(root: Path, quote: Path) -> Path:
     return path
 
 
-class FakeCuda:
+class FakeMps:
+    @staticmethod
+    def is_built() -> bool:
+        return True
+
     @staticmethod
     def is_available() -> bool:
         return True
 
-    @staticmethod
-    def device_count() -> int:
-        return 1
-
-    @staticmethod
-    def get_device_name(_: int) -> str:
-        return "NVIDIA L4"
-
 
 class FakeTorch:
     __version__ = "2.9.1+cu129"
-    version = SimpleNamespace(cuda="12.9")
-    cuda = FakeCuda()
+    backends = SimpleNamespace(mps=FakeMps())
 
 
 class FakeFeatureResult:
@@ -153,6 +149,14 @@ class FakeProcessor:
 
 
 class LoraTrainingTest(unittest.TestCase):
+    def test_local_mps_runner_has_timeout_and_private_cleanup(self) -> None:
+        source = LOCAL_MPS_RUNNER.read_text(encoding="utf-8")
+        self.assertIn('status --porcelain', source)
+        self.assertIn('external_timeout_seconds', source)
+        self.assertIn('kill -TERM "${CHILD_PID}"', source)
+        self.assertIn('cleanup_private_staging', source)
+        self.assertIn('caffeinate -dimsu', source)
+
     def test_whisper_uses_generic_peft_forward_wrapper(self) -> None:
         experiment = json.loads(EXPERIMENT_CONFIG.read_text(encoding="utf-8"))
         captured: dict[str, object] = {}
@@ -177,14 +181,15 @@ class LoraTrainingTest(unittest.TestCase):
             )
             quote_sha256 = hashlib.sha256(quote.read_bytes()).hexdigest()
         self.assertLess(decision.quoted_total_krw_with_contingency, 20_000)
-        self.assertEqual(9_032, decision.independent_experiment_ceiling_krw)
-        self.assertEqual(59_032, decision.independent_total_ceiling_krw)
+        self.assertEqual(0, decision.quoted_total_krw_with_contingency)
+        self.assertEqual(0, decision.independent_experiment_ceiling_krw)
+        self.assertEqual(50_000, decision.independent_total_ceiling_krw)
         self.assertEqual(quote_sha256, decision.quote_sha256)
 
     def test_cost_quote_rejects_expiry_and_compute_ceiling(self) -> None:
         execution = json.loads(EXECUTION_CONFIG.read_text(encoding="utf-8"))
         for machine_hour, now, message in (
-            (0.706832276, datetime(2026, 9, 8, 0, 0, tzinfo=timezone.utc), "current"),
+            (0, datetime(2026, 9, 8, 0, 0, tzinfo=timezone.utc), "current"),
             (1.1, datetime(2026, 9, 7, 1, 0, tzinfo=timezone.utc), "compute"),
         ):
             with (
@@ -259,7 +264,7 @@ class LoraTrainingTest(unittest.TestCase):
                 )
         self.assertTrue(claim.remote_object_uri.endswith(".claimed.json"))
 
-    def test_runtime_accepts_only_pinned_single_l4(self) -> None:
+    def test_runtime_accepts_only_pinned_local_mps(self) -> None:
         execution = json.loads(EXECUTION_CONFIG.read_text(encoding="utf-8"))
         packages = execution["runtime"]["packages"]
         versions = {
@@ -269,54 +274,39 @@ class LoraTrainingTest(unittest.TestCase):
             "numpy": packages["numpy"],
             "scipy": packages["scipy"],
         }
-        with patch.object(
-            lora_training.sys,
-            "version_info",
-            SimpleNamespace(major=3, minor=12),
+        with (
+            patch.object(
+                lora_training.sys,
+                "version_info",
+                SimpleNamespace(major=3, minor=11),
+            ),
+            patch.object(lora_training.platform, "machine", return_value="arm64"),
         ):
             report = validate_gpu_runtime(
                 execution,
                 torch_module=FakeTorch(),
                 installed_version=versions.__getitem__,
             )
-        self.assertEqual("NVIDIA L4", report["gpu_name"])
+        self.assertEqual("Apple MPS", report["gpu_name"])
         self.assertEqual(1, report["gpu_count"])
 
-        class NoCudaTorch(FakeTorch):
-            cuda = SimpleNamespace(is_available=lambda: False)
-
-        with (
-            patch.object(
-                lora_training.sys,
-                "version_info",
-                SimpleNamespace(major=3, minor=12),
-            ),
-            self.assertRaisesRegex(RuntimeError, "CPU training fallback"),
-        ):
-            validate_gpu_runtime(
-                execution,
-                torch_module=NoCudaTorch(),
-                installed_version=versions.__getitem__,
-            )
-
-        class WrongGpuTorch(FakeTorch):
-            cuda = SimpleNamespace(
-                is_available=lambda: True,
-                device_count=lambda: 1,
-                get_device_name=lambda _: "Tesla T4",
+        class NoMpsTorch(FakeTorch):
+            backends = SimpleNamespace(
+                mps=SimpleNamespace(is_built=lambda: True, is_available=lambda: False)
             )
 
         with (
             patch.object(
                 lora_training.sys,
                 "version_info",
-                SimpleNamespace(major=3, minor=12),
+                SimpleNamespace(major=3, minor=11),
             ),
-            self.assertRaisesRegex(RuntimeError, "registered runtime"),
+            patch.object(lora_training.platform, "machine", return_value="arm64"),
+            self.assertRaisesRegex(RuntimeError, "MPS is required"),
         ):
             validate_gpu_runtime(
                 execution,
-                torch_module=WrongGpuTorch(),
+                torch_module=NoMpsTorch(),
                 installed_version=versions.__getitem__,
             )
 

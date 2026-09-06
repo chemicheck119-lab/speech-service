@@ -29,7 +29,7 @@
 | 서울·인천 신고음성·모의 통신 왜곡 평가 | 구현·실행 완료(실제 현장 무전 아님) |
 | 실시간 스트리밍 API·패드 연동 | 설계·구현 전 |
 | Whisper tokenizer·data preflight | 구현·실행 완료 |
-| 제한 LoRA GPU 학습 harness | 구현 완료·GPU 실행 전 |
+| 제한 LoRA local MPS 학습 harness | 구현 완료·전체 학습 실행 전 |
 | LoRA adapter·A/B/C 성능 평가 | 설계 완료·실행 전 |
 | 화학용어 사후 자동교정 | 미구현; 원문 보존 원칙상 현재 범위 제외 |
 | 현장 무전 성능 | 검증되지 않음 |
@@ -215,27 +215,36 @@ chemicheck119-speech-lora-tokenizer-preflight \
   --output /secure/lora-tokenizer-preflight.json
 ```
 
-### 제한 LoRA 학습 harness
+### 제한 LoRA local MPS 학습 harness
 
-GPU harness는 학습만 수행하고 adapter를 `trained_unvalidated`로 저장합니다. 성능 평가,
+학습 harness는 학습만 수행하고 adapter를 `trained_unvalidated`로 저장합니다. 성능 평가,
 base 병합, CTranslate2 변환, 운영 채택·배포는 수행하지 않습니다. 실행 전 다음 조건을 모두
 fail-closed로 확인합니다.
 
 - 등록된 config·data artifact SHA-256과 tokenizer 160-token 상한
-- 서울 `asia-northeast3`의 Python 3.12, CUDA 12.9, PyTorch 2.9.x, 단일 L4
-- 24시간 이내의 현재 가격표와 20,000원 실험·70,000원 전체 비용 상한
+- 소유한 M4·24GB의 Python 3.11, PyTorch 2.9.x, arm64·MPS
+- 24시간 이내의 증분 서버비 0원 확인서와 70,000원 전체 비용 상한
 - record 단위 고정 60:40 clean/`wind_snr0` 배정과 발화 1회 학습
 - commit-bound 단일 사용 authorization과 원격 원자적 claim
-- 명시적 1회 실행 확인문, 9,600초 내부 deadline, retry 0, CPU fallback 금지
+- 명시적 1회 실행 확인문, 42,600초 내부 deadline, retry 0, CPU fallback 금지
 
-가격표는 `whisper-small-lora-cost-quote-v1` JSON으로 GPU가 포함된 G2 machine·100GiB boot
-disk·network transfer·환율과 HTTPS 출처를 항목별로 기록합니다. 서울·도쿄 T4 네 zone의
-재고 부족 뒤 서울 L4로 변경했고, 등록된 보수적 독립 상한은 9,032원, 이전 개발비 ceiling을
-합친 상한은 59,032원입니다. 실제 실행 직전 가격표가 이보다 낮아도 25% contingency를 다시
-적용합니다.
+Compute Engine은 서울·도쿄 T4 네 zone의 재고 부족 뒤 서울 L4로 변경했지만, 신설 프로젝트의
+global GPU quota 0과 quota 요청 자동 거절로 차단됐습니다. 현재 profile은 이미 소유한 M4를
+사용하므로 추가 server·disk·network 비용은 0원입니다. 그래도 실행 중복을 막기 위해
+`whisper-small-lora-cost-quote-v1` 확인서와 GCS remote claim을 유지합니다.
 
 ```bash
-timeout --signal=TERM --kill-after=60s 9900 chemicheck119-speech-lora-train \
+scripts/run_whisper_lora_mps_once.sh \
+  /private/venv/bin/python \
+  /private/gwangju-lora-artifacts-v1 \
+  /private/current-local-cost-quote.json \
+  /private/training-run-UNIQUE
+```
+
+runner 내부 명령은 다음 계약을 고정합니다.
+
+```bash
+chemicheck119-speech-lora-train \
   --execution-config config/whisper_lora_execution_v1.json \
   --experiment-config config/whisper_lora_experiment_v1.json \
   --artifact-root /secure/gwangju-lora-artifacts-v1 \
@@ -246,17 +255,15 @@ timeout --signal=TERM --kill-after=60s 9900 chemicheck119-speech-lora-train \
   --runner-revision SPEECH_SERVICE_MERGE_COMMIT_SHA
 ```
 
-이 명령은 단독 persistent VM에서 실행하지 않습니다. `infra` 저장소의 1회성 L4 runner가
-먼저 authorization ID를 GCS에 `if-generation-match=0`으로 claim하고, process를 9,900초에
-종료하며, VM과 boot disk를 최대 10,800초에 자동 삭제하는 경우에만 실행합니다. 같은
-authorization을 다시 쓰면 학습 전에 실패하고, 재실험은 이전 독립 비용 ceiling을 누적한 새
-견적이 필요합니다.
+local runner는 현재 main commit과 clean worktree만 허용하고 `caffeinate`로 sleep을 방지합니다.
+42,900초에 `TERM`, 60초 뒤 강제 종료하는 watchdog을 두며 같은 authorization을 다시 쓰면
+학습 전에 실패합니다.
 
 원본 full-call WAV는 선택된 조건에서 한 번만 권한 `0600` 임시 공간으로 풀고, 발화
 timestamp 구간만 8kHz→16kHz로 재표본화해 학습합니다. 임시 음성과 Trainer 작업 디렉터리는
-정상 종료 또는 `TERM` 시 제거합니다. 60초 후 강제 kill이나 host 장애 때는 `infra` runner의
-auto-delete disk가 최종 폐기 경계입니다. 결과 보고서에는 aggregate loss·속도·artifact hash만
-남고 전사문·주소·recordId는 포함하지 않습니다. GPU 실행 전 상태는 **구현 완료·학습 실행
+정상 종료 또는 `TERM` 시 제거합니다. runner는 예측 가능한 private staging 경로만 추가로
+정리합니다. 결과 보고서에는 aggregate loss·속도·artifact hash만 남고 전사문·주소·recordId는
+포함하지 않습니다. 전체 실행 전 상태는 **구현 완료·학습 실행
 전**이며, adapter가 생겨도 잠금 dev와 downstream 안전평가 전에는 **부분 구현 또는 개발용
 데모**입니다.
 

@@ -15,11 +15,11 @@ import json
 import math
 import os
 from pathlib import Path
+import platform
 import re
 import shutil
 import signal
 import sys
-import tempfile
 import time
 from typing import Callable, Mapping, Sequence
 import wave
@@ -165,7 +165,8 @@ def validate_cost_quote(
     runtime = _object(execution_config.get("runtime"), "runtime config")
     resource = _object(quote.get("resource"), "cost quote resource")
     expected_resource = {
-        "gcp_region": runtime["gcp_region"],
+        "provider": runtime["provider"],
+        "location": runtime["location"],
         "machine_type": runtime["machine_type"],
         "gpu_type": runtime["gpu_type"],
         "gpu_count": runtime["gpu_count"],
@@ -178,20 +179,21 @@ def validate_cost_quote(
         raise ValueError("cost quote resource does not match the registered runtime")
 
     pricing = _object(quote.get("pricing"), "cost quote pricing")
-    if pricing.get("model") != "accelerator_optimized_machine":
+    if pricing.get("model") != "local_owned_hardware":
         raise ValueError("cost quote pricing model does not match the registered runtime")
     compute_hour = _finite_positive(
-        pricing.get("machine_usd_per_hour"), "machine price"
+        pricing.get("machine_usd_per_hour"), "machine price", allow_zero=True
     )
     disk_month = _finite_positive(
-        pricing.get("boot_disk_usd_per_gib_month"), "boot disk price"
+        pricing.get("boot_disk_usd_per_gib_month"),
+        "boot disk price",
+        allow_zero=True,
     )
     network_total = _finite_positive(
         pricing.get("network_transfer_usd"),
         "network transfer price",
         allow_zero=True,
     )
-    month_hours = _finite_positive(pricing.get("month_hours"), "month hours")
     fx = _finite_positive(quote.get("fx_krw_per_usd"), "FX rate")
     sources = quote.get("sources")
     if (
@@ -205,9 +207,7 @@ def validate_cost_quote(
         raise ValueError("cost quote must contain HTTPS pricing and FX sources")
 
     hours = expected_resource["runtime_hours"]
-    boot_total = (
-        disk_month * float(runtime["boot_disk_gib"]) * hours / month_hours
-    )
+    boot_total = disk_month * float(runtime["boot_disk_gib"])
     total_usd = compute_hour * hours + boot_total + network_total
     cost_guard = _object(execution_config.get("cost_guard"), "cost guard")
     contingency = _finite_positive(
@@ -310,7 +310,7 @@ def validate_gpu_runtime(
     torch_module: object | None = None,
     installed_version: Callable[[str], str] = distribution_version,
 ) -> dict[str, object]:
-    """Reject any runtime other than the single registered GPU environment."""
+    """Reject any runtime other than the registered local Apple MPS environment."""
 
     runtime = _object(execution_config.get("runtime"), "runtime config")
     if (
@@ -327,18 +327,15 @@ def validate_gpu_runtime(
     torch_version = str(getattr(torch_module, "__version__", ""))
     if not torch_version.startswith(str(packages["torch_expected_prefix"])):
         raise RuntimeError("PyTorch runtime does not match the execution config")
-    cuda_version = str(getattr(getattr(torch_module, "version", None), "cuda", ""))
-    if cuda_version != runtime["cuda_major_minor"]:
-        raise RuntimeError("CUDA runtime does not match the execution config")
-    cuda = getattr(torch_module, "cuda", None)
-    if cuda is None or not cuda.is_available():
-        raise RuntimeError("CUDA is required; CPU training fallback is disabled")
-    if int(cuda.device_count()) != int(runtime["gpu_count"]):
-        raise RuntimeError("GPU count does not match the execution config")
-    device_name = str(cuda.get_device_name(0))
-    expected_gpu_token = {"nvidia-l4": "L4"}.get(str(runtime["gpu_type"]))
-    if expected_gpu_token is None or expected_gpu_token not in device_name.upper():
-        raise RuntimeError("GPU model does not match the registered runtime")
+    if platform.machine() != runtime["architecture"]:
+        raise RuntimeError("machine architecture does not match the execution config")
+    if runtime.get("accelerator_backend") != "mps":
+        raise RuntimeError("accelerator backend does not match the execution config")
+    backends = getattr(torch_module, "backends", None)
+    mps = getattr(backends, "mps", None)
+    if mps is None or not mps.is_built() or not mps.is_available():
+        raise RuntimeError("MPS is required; CPU training fallback is disabled")
+    device_name = "Apple MPS"
     observed_packages: dict[str, str] = {}
     for package in ("transformers", "peft", "accelerate", "numpy", "scipy"):
         observed = installed_version(package)
@@ -348,8 +345,8 @@ def validate_gpu_runtime(
     return {
         "python": f"{sys.version_info.major}.{sys.version_info.minor}",
         "torch": torch_version,
-        "cuda": cuda_version,
-        "gpu_count": int(cuda.device_count()),
+        "accelerator_backend": "mps",
+        "gpu_count": int(runtime["gpu_count"]),
         "gpu_name": device_name,
         "packages": observed_packages,
     }
@@ -736,10 +733,12 @@ def run_bounded_training(
 
     output_dir.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     output_dir.parent.chmod(0o700)
-    stage = Path(tempfile.mkdtemp(prefix=".lora-stage-", dir=output_dir.parent))
-    work = Path(tempfile.mkdtemp(prefix="chemicheck119-lora-work-"))
-    stage.chmod(0o700)
-    work.chmod(0o700)
+    stage = output_dir.parent / f".{output_dir.name}.stage"
+    work = output_dir.parent / f".{output_dir.name}.work"
+    if any(path.exists() or path.is_symlink() for path in (stage, work)):
+        raise FileExistsError("refusing to reuse LoRA private staging paths")
+    stage.mkdir(mode=0o700)
+    work.mkdir(mode=0o700)
     runtime_limit = int(execution["runtime"]["internal_deadline_seconds"])
     remaining_seconds = runtime_limit - math.ceil(time.monotonic() - started_monotonic)
     if remaining_seconds <= 0:
@@ -803,6 +802,11 @@ def run_bounded_training(
             max_grad_norm=float(training["max_gradient_norm"]),
             fp16=bool(training["fp16"]),
             gradient_checkpointing=bool(training["gradient_checkpointing"]),
+            gradient_checkpointing_kwargs={
+                "use_reentrant": bool(
+                    execution["runtime"]["gradient_checkpointing_use_reentrant"]
+                )
+            },
             eval_strategy="no",
             save_strategy="no",
             logging_strategy="steps",
@@ -810,15 +814,15 @@ def run_bounded_training(
             report_to=[],
             remove_unused_columns=False,
             dataloader_num_workers=int(execution["runtime"]["dataloader_num_workers"]),
+            dataloader_pin_memory=bool(
+                execution["runtime"]["dataloader_pin_memory"]
+            ),
             seed=int(training["seed"]),
             data_seed=int(training["seed"]),
             full_determinism=bool(execution["runtime"]["deterministic_algorithms"]),
             tf32=bool(execution["runtime"]["allow_tf32"]),
             predict_with_generate=False,
         )
-        torch.backends.cuda.matmul.allow_tf32 = False
-        torch.backends.cudnn.allow_tf32 = False
-        torch.backends.cudnn.benchmark = False
         torch.use_deterministic_algorithms(True)
         collator = WhisperDataCollator(processor, model.config.decoder_start_token_id)
         trainer = Seq2SeqTrainer(

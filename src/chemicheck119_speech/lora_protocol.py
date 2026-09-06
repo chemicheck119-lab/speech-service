@@ -18,7 +18,7 @@ DATASET_ID = "aihub_71768_gwangju_fire"
 DATASET_VERSION = "dataset-71768_downloaded-2026-09-05"
 EVIDENCE_SCOPE = "AIHub 신고전화와 절차적 모의 통신 왜곡; 실제 현장 무전 검증 아님"
 REGISTERED_CONFIG_SHA256 = (
-    "6ce59b3623290c98561cdfa5f0f046e170779519ffd3e3687d31d2ae35d78c94"
+    "273284641b807936bd333c90e4e0e697e443c8caf3055efe7404348cf9ad663d"
 )
 REGISTERED_SPLIT_MANIFEST_SHA256 = (
     "3ef9d791c090d11a249c66468e4836f79323d4496242c5c1dd74ce071ce7300d"
@@ -175,15 +175,19 @@ def load_experiment_config(path: Path) -> tuple[dict[str, object], bytes]:
     if evaluation != expected_evaluation:
         raise ValueError("evaluation thresholds are not fully pre-registered")
     if (
-        cost.get("gcp_region") != "asia-northeast3"
-        or cost.get("gpu_type") != "nvidia-l4"
+        cost.get("runtime_profile") != "local_mps"
+        or cost.get("provider") != "local_owned_hardware"
+        or cost.get("accelerator_backend") != "mps"
+        or cost.get("gpu_type") != "apple-mps"
         or cost.get("gpu_count") != 1
-        or cost.get("machine_type") != "g2-standard-4"
-        or cost.get("max_runtime_hours") != 3
-        or cost.get("max_instances") != 1
+        or cost.get("machine_type") != "apple-m4"
+        or cost.get("max_runtime_hours") != 12
+        or cost.get("max_processes") != 1
         or cost.get("retry_count") != 0
-        or cost.get("experiment_hard_cap_krw") != 20000
+        or cost.get("incremental_server_cost_krw") != 0
+        or cost.get("experiment_hard_cap_krw") != 0
         or cost.get("total_development_server_cap_krw") != 70000
+        or cost.get("gcp_gpu_status") != "blocked_global_quota_0"
         or cost.get("automatic_training_allowed") is not False
     ):
         raise ValueError("cost guard is not the pre-registered bounded configuration")
