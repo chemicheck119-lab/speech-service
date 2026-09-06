@@ -53,7 +53,7 @@
     ]
   },
   "lora": {
-    "task_type": "SEQ_2_SEQ_LM",
+    "peft_wrapper": "generic",
     "rank": 8,
     "alpha": 16,
     "dropout": 0.05,

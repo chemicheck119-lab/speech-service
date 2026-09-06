@@ -18,7 +18,7 @@ DATASET_ID = "aihub_71768_gwangju_fire"
 DATASET_VERSION = "dataset-71768_downloaded-2026-09-05"
 EVIDENCE_SCOPE = "AIHub 신고전화와 절차적 모의 통신 왜곡; 실제 현장 무전 검증 아님"
 REGISTERED_CONFIG_SHA256 = (
-    "79f3440cf6d81aa203814ca51af799c55e7b3c876c3862399e2d4686efa13f93"
+    "6ce59b3623290c98561cdfa5f0f046e170779519ffd3e3687d31d2ae35d78c94"
 )
 REGISTERED_SPLIT_MANIFEST_SHA256 = (
     "3ef9d791c090d11a249c66468e4836f79323d4496242c5c1dd74ce071ce7300d"
@@ -126,7 +126,7 @@ def load_experiment_config(path: Path) -> tuple[dict[str, object], bytes]:
     ):
         raise ValueError("model IDs or revisions are not pinned")
     if lora != {
-        "task_type": "SEQ_2_SEQ_LM",
+        "peft_wrapper": "generic",
         "rank": 8,
         "alpha": 16,
         "dropout": 0.05,

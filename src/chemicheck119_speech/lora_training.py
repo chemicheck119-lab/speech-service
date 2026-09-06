@@ -620,6 +620,23 @@ def _clean_metrics(metrics: Mapping[str, object]) -> dict[str, float]:
     return result
 
 
+def build_whisper_lora_config(
+    lora: dict[str, object], factory: Callable[..., object]
+) -> object:
+    """Use generic PEFT forwarding because Whisper consumes input_features."""
+
+    if lora.get("peft_wrapper") != "generic":
+        raise ValueError("Whisper LoRA requires the registered generic PEFT wrapper")
+    return factory(
+        r=int(lora["rank"]),
+        lora_alpha=int(lora["alpha"]),
+        lora_dropout=float(lora["dropout"]),
+        bias=str(lora["bias"]),
+        target_modules=list(lora["target_modules"]),
+        task_type=None,
+    )
+
+
 def _install_deadline(seconds: int) -> Callable[[], None]:
     if not hasattr(signal, "SIGALRM"):
         raise RuntimeError(
@@ -678,7 +695,7 @@ def run_bounded_training(
     os.environ["USE_TF"] = "0"
     try:
         import torch
-        from peft import LoraConfig, TaskType, get_peft_model
+        from peft import LoraConfig, get_peft_model
         from transformers import (
             Seq2SeqTrainer,
             Seq2SeqTrainingArguments,
@@ -762,14 +779,7 @@ def run_bounded_training(
         lora = _object(experiment["lora"], "LoRA config")
         model = get_peft_model(
             model,
-            LoraConfig(
-                r=int(lora["rank"]),
-                lora_alpha=int(lora["alpha"]),
-                lora_dropout=float(lora["dropout"]),
-                bias=str(lora["bias"]),
-                target_modules=list(lora["target_modules"]),
-                task_type=TaskType.SEQ_2_SEQ_LM,
-            ),
+            build_whisper_lora_config(lora, LoraConfig),
         )
         trainable = sum(
             parameter.numel()

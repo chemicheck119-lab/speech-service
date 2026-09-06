@@ -15,6 +15,7 @@ from chemicheck119_speech.lora_data_preflight import validate_lora_data_prefligh
 from chemicheck119_speech.lora_training import (
     CONFIRMATION_PHRASE,
     WhisperSegmentDataset,
+    build_whisper_lora_config,
     materialize_training_examples,
     run_bounded_training,
     validate_authorization_claim,
@@ -152,6 +153,18 @@ class FakeProcessor:
 
 
 class LoraTrainingTest(unittest.TestCase):
+    def test_whisper_uses_generic_peft_forward_wrapper(self) -> None:
+        experiment = json.loads(EXPERIMENT_CONFIG.read_text(encoding="utf-8"))
+        captured: dict[str, object] = {}
+
+        def factory(**kwargs: object) -> object:
+            captured.update(kwargs)
+            return object()
+
+        build_whisper_lora_config(experiment["lora"], factory)
+        self.assertIsNone(captured["task_type"])
+        self.assertEqual(["q_proj", "v_proj"], captured["target_modules"])
+
     def test_cost_quote_is_below_both_independent_caps(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             quote = _quote(Path(directory))
