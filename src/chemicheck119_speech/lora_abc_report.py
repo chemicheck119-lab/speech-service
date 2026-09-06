@@ -283,6 +283,7 @@ def build_abc_report(
     summaries: Mapping[str, Path],
     records: Mapping[str, Path],
     output_path: Path,
+    evaluator_revision: str,
 ) -> dict[str, object]:
     """Validate three locked runs and decide only the clean evaluation gate."""
 
@@ -293,6 +294,8 @@ def build_abc_report(
     )
     if set(summaries) != set(arms) or set(records) != set(arms):
         raise ValueError("all and only A/B/C inputs are required")
+    if re.fullmatch(r"[0-9a-f]{40}", evaluator_revision) is None:
+        raise ValueError("evaluator revision must be a full Git commit")
     if output_path.exists() or output_path.is_symlink():
         raise FileExistsError("refusing to overwrite A/B/C report")
     conversion = validate_conversion_output(conversion_report_path)
@@ -404,6 +407,7 @@ def build_abc_report(
         ),
         "dataset": fingerprints[a],
         "provenance": {
+            "evaluator_revision": evaluator_revision,
             "conversion_report_sha256": _sha256(conversion_report_path),
             "experiment_config_sha256": hashlib.sha256(experiment_bytes).hexdigest(),
             "priority_terms_sha256": hashlib.sha256(terms_bytes).hexdigest(),
@@ -471,6 +475,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.add_argument(f"--{arm}-summary", type=Path, required=True)
         parser.add_argument(f"--{arm}-records", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--evaluator-revision", required=True)
     args = parser.parse_args(argv)
     arm_names = (
         "A_operational_baseline",
@@ -484,6 +489,7 @@ def main(argv: list[str] | None = None) -> int:
         summaries=dict(zip(arm_names, (args.a_summary, args.b_summary, args.c_summary))),
         records=dict(zip(arm_names, (args.a_records, args.b_records, args.c_records))),
         output_path=args.output,
+        evaluator_revision=args.evaluator_revision,
     )
     print(
         json.dumps(
