@@ -43,6 +43,23 @@ Parser 사람 정답 Recall, Resolver CAS Top-1·Top-3 정확도, 실제 오답 
 지역별 발화 구성과 우선용어 출현량이 다르므로 광주와의 단순 점수 차이만으로 채택하지
 않습니다. 레코드별 분포·bootstrap 구간과 반복 오류 유형을 함께 봅니다.
 
+## 실제 clean 기준선 결과
+
+| 지역·범위 | 레코드 | CER | WER | RTF | 우선용어 Recall | Precision | false insertion |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 광주 Validation | 77 | 43.75% | 63.30% | 0.214 | 81.71% | 98.53% | 1 |
+| 인천 Validation | 129 | 36.26% | 55.33% | 0.184 | 90.00% | 100.00% | 0 |
+| 서울 Validation | 965 | 40.89% | 59.72% | 0.200 | 86.36% | 97.45% | 24 |
+
+세 지역은 같은 고정 설정을 사용했지만 지역별 발화 구성과 길이가 다릅니다. 따라서 이 표는
+지역 순위를 매기거나 광주보다 일반화가 개선됐다고 주장하는 자료가 아닙니다. 서울의 false
+insertion 24건은 절대 건수이며, 사전 등록한 term-negative opportunity 기준 비율은
+0.251%였습니다.
+
+인천·서울 모두 처리속도·Precision·false insertion Gate를 통과해 신고전화 proxy 기준선을
+**조건부 채택**했습니다. 후단 Parser·Resolver 양성 분모가 각각 2건뿐이고 CAS 사람 정답이
+없으므로 후단 수치는 정확도가 아니라 참조 전사 대비 실버 보존 지표입니다.
+
 ## 사전 등록한 해석 기준
 
 - 평가 유효성: 전체 고정 레코드 평가, STT 실패 0건, 설정·archive·manifest 해시 일치,
@@ -105,9 +122,14 @@ CER·WER는 지역별 신고 길이와 표현 구성이 달라 단독 합격선�
 | 광주 화재 77건 기준선·hotword A/B | 구현 완료 | 고정 summary와 평가 보고서 |
 | 임의 지역 manifest 검증·baseline-only 실행 코드 | 부분 구현 또는 개발용 데모 | AIHub 신고 전화 전용 |
 | 인천 archive 무결성 검사·기준선 129건 평가 | 구현 완료 | 비공개 summary·records와 SHA-256 |
-| 서울 archive 무결성 검사·기준선 965건 평가 | 부분 구현 또는 개발용 데모 | 동일 Cloud Run execution 진행 중 |
+| 서울 archive 무결성 검사·기준선 965건 평가 | 구현 완료 | 비공개 summary·records와 SHA-256 |
 | 서울·인천 모의 통신 왜곡 파생 데이터 | 구현 완료 | `radio-sim-v1` run summary |
-| 서울·인천 모의 통신 왜곡 STT·후단 평가 | 부분 구현 또는 개발용 데모 | 평가기·Job 준비 완료, 실제 실행 전 |
-| 교차지역 보고서 provenance Gate | 구현 완료 | 실제 서울 결과 보고서 생성 전 |
-| Whisper LoRA | 설계 완료·구현 전 | 반복 오류 Gate 통과 시에만 제한 실험 |
+| 서울·인천 모의 통신 왜곡 STT·후단 평가 | 부분 구현 또는 개발용 데모 | 각 40건×18조건, 안전 위반 0 |
+| 교차지역 보고서 provenance Gate | 구현 완료 | report SHA-256 고정 |
+| 제한 Whisper LoRA | 부분 구현 또는 개발용 데모 | #18에서 광주 Training 전체 학습 진행 중 |
 | 실제 현장 무전 성능 | 검증되지 않은 가설 | 현장 음성 없음 |
+
+주요 artifact SHA-256은 인천 clean summary
+`efd30380157137b88e0cccc0c992b9ff88693f9a79973c995d189a93b4d8158e`, 서울 clean summary
+`25d673bc1638d045430f94b9f8fb4ac5f6e7dfaa992d3a9e7c513e9d2b6ed446`, 교차지역 report
+`95fd07e92d6007253d7f043924a49cfe4147f4065597652ea3f5d17afd7707b9`입니다.

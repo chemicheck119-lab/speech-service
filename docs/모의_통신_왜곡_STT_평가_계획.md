@@ -54,6 +54,28 @@
 - LoRA 기각: 우선용어 Recall만 오르고 Precision·F1이 하락하거나 false insertion·잘못된
   CAS 승격이 증가할 때
 
+## 실제 실행 결과
+
+사실 상태는 **부분 구현 또는 개발용 데모**입니다. AIHub 신고전화 각 40건에 절차적으로
+만든 clean 포함 18조건을 적용했으며, 실제 무전 녹음이 아닙니다.
+
+| 지역·조건 | CER | WER | 우선용어 Recall | Precision | false insertion |
+|---|---:|---:|---:|---:|---:|
+| 인천 clean | 35.91% | 53.64% | 96.30% | 100.00% | 0 |
+| 인천 `wind_snr0` | 58.73% | 72.14% | 66.67% | 100.00% | 0 |
+| 서울 clean | 39.40% | 59.59% | 93.33% | 100.00% | 0 |
+| 서울 `wind_snr0` | 53.18% | 69.80% | 76.67% | 95.83% | 1 |
+
+표의 Recall은 11개 우선용어 전체 presence 집계입니다. LoRA 진입 Gate에서 사용한 개별
+공개 용어 `연기` Recall은 인천 66.67%, 서울 72.22%로 서로 다른 지표이므로 섞지 않습니다.
+두 지역 모두 같은 `wind_snr0`에서 반복 누락이 확인돼 판정은
+`ELIGIBLE_FOR_BOUNDED_LORA_EXPERIMENT_DESIGN`이었습니다. 이는 제한 실험을 설계할 근거일
+뿐 LoRA의 개선이나 자동 학습·운영 채택을 뜻하지 않습니다.
+
+두 지역 전체 downstream 실행에서 API 오류·분석 누락·후보 자동 승격·2-CAS Gate 우회·
+확인 전 위험 출력·Rule 조기 실행은 모두 0건이었습니다. CAS 사람 정답이 없으므로 Resolver
+정확도 또는 실제 안전성 지표로 표현하지 않습니다.
+
 ## 사실 상태
 
 | 항목 | 상태 |
@@ -61,9 +83,16 @@
 | 전체 18조건·해시·24시간 상한 검사 | 구현 완료 |
 | 조건별 STT·paired 변화 집계 fixture 테스트 | 구현 완료 |
 | 서울·인천 execution·summary runtime provenance 결합 | 구현 완료 |
-| 서울·인천 승인 데이터 실행 | 설계 완료·구현 전 |
-| STT→Parser→Resolver 안전 평가 | 설계 완료·구현 전 |
+| 서울·인천 승인 데이터 실행 | 부분 구현 또는 개발용 데모 — 각 40건×18조건 완료 |
+| STT→Parser→Resolver 안전 평가 | 부분 구현 또는 개발용 데모 — 안전 위반 0, CAS 정답 없음 |
+| 제한 Whisper LoRA | 부분 구현 또는 개발용 데모 — #18에서 진행 중 |
 | 실제 현장 무전 성능 | 검증되지 않은 가설 |
+
+주요 artifact SHA-256은 인천 summary
+`6f85ffcd0b0f65c28721cff74351d1bdedffa037ce2ccdd26dc850c0befc57a6`, 서울 summary
+`9144c4adf028aabd13257374689f25296ab45b8cdce6ccbf9a957919c15ab2fd`, execution provenance
+`0a88ebda81062ca2010a85b166b9f5862b9479d4062d0e2be3673d2caeb764ce`, 최종 LoRA Gate
+`2e681817780ecb1385271cff41adedcad8245ac25d985d64ff54dfe2569e13e9`입니다.
 
 ## 주장 경계
 
