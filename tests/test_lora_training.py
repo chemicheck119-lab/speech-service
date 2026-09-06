@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -25,6 +26,9 @@ from tests.test_lora_data_preflight import _fixture
 ROOT = Path(__file__).resolve().parents[1]
 EXECUTION_CONFIG = ROOT / "config" / "whisper_lora_execution_v1.json"
 EXPERIMENT_CONFIG = ROOT / "config" / "whisper_lora_experiment_v1.json"
+LORA_NUMERIC_RUNTIME_AVAILABLE = all(
+    importlib.util.find_spec(package) is not None for package in ("numpy", "scipy")
+)
 
 
 def _quote(root: Path, *, gpu_hour: float = 0.35, hours_old: int = 0) -> Path:
@@ -213,6 +217,10 @@ class LoraTrainingTest(unittest.TestCase):
         self.assertEqual(4, sum(item["record_count"] for item in counts.values()))
         self.assertNotIn("train-", json.dumps(counts))
 
+    @unittest.skipUnless(
+        LORA_NUMERIC_RUNTIME_AVAILABLE,
+        "LoRA optional NumPy/SciPy dependencies are not installed",
+    )
     def test_segment_dataset_resamples_8khz_to_16khz(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
