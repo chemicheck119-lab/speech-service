@@ -47,7 +47,9 @@ def _read_json(path: Path, *, maximum: int, name: str) -> dict[str, object]:
     return _object(payload, name)
 
 
-def _read_private_rows(path: Path) -> list[dict[str, object]]:
+def _read_private_rows(
+    path: Path, *, expected_records: int = EXPECTED_RECORDS
+) -> list[dict[str, object]]:
     if path.is_symlink() or not path.is_file():
         raise ValueError("records must be a regular non-symlink file")
     file_stat = path.stat()
@@ -63,8 +65,10 @@ def _read_private_rows(path: Path) -> list[dict[str, object]]:
             if len(line) > MAX_RECORD_LINE_BYTES:
                 raise ValueError("record line exceeds the bounded size")
             rows.append(_object(json.loads(line.decode("utf-8")), "evaluation row"))
-    if len(rows) != EXPECTED_RECORDS:
-        raise ValueError("locked evaluation must contain exactly 77 rows")
+    if len(rows) != expected_records:
+        raise ValueError(
+            f"evaluation must contain exactly {expected_records} private rows"
+        )
     return rows
 
 

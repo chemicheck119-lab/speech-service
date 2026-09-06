@@ -355,6 +355,32 @@ scripts/run_whisper_lora_abc_locked_once.sh \
   /private/abc-evaluation-UNIQUE
 ```
 
+### LoRA `wind_snr0` 개발 Gate
+
+clean Gate를 통과한 B·C만 광주 Training 내부 dev 132건의 절차적 `wind_snr0` 파생 음성에
+같은 CPU int8 설정으로 적용합니다. 이 자료는 모델 선택에 쓰는 **development set**이며,
+독립 test나 실제 현장 무전 자료가 아닙니다. 판정기는 archive·manifest hash, B/C record
+pairing, runtime, conversion model binding을 확인하고 private record에서 모든 지표를 다시
+계산합니다.
+
+다음 조건을 모두 만족해야 downstream Parser·Resolver 안전 Gate로 진행합니다.
+
+- B 대비 C의 CER 또는 WER 상대 개선 5% 이상이며 paired bootstrap 95% CI 상한이 0 이하
+- `연기` recall 절대 개선 0.10 이상, 전체 우선용어 F1 개선 0.03 이상
+- false insertion 증가 0 이하, 두 arm RTF 0.5 이하
+
+통과해도 LoRA를 자동 채택하지 않으며, 실제 현장 무전 성능·현장 안전·상용 운영 성능을
+주장할 수 없습니다.
+
+```bash
+scripts/run_whisper_lora_wind_dev_once.sh \
+  /private/venv/bin/python \
+  /private/gwangju-lora-artifacts-v1 \
+  /private/conversion-run \
+  /private/abc-evaluation/abc-locked-evaluation.json \
+  /private/wind-development-evaluation-UNIQUE
+```
+
 ## 기본 검증
 
 ```bash

@@ -171,6 +171,51 @@ class EvaluationTest(unittest.TestCase):
                 summary["experiment_id"],
             )
 
+    def test_preserves_registered_development_scope_for_full_dev_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            audio_path = root / "audio.zip"
+            label_path = root / "labels.zip"
+            with zipfile.ZipFile(audio_path, "w") as audio_archive:
+                audio_archive.writestr("a.wav", wav_bytes())
+            label = {
+                "recordId": "record-a",
+                "utterances": [{"startAt": 0, "endAt": 100, "text": "가스"}],
+            }
+            with zipfile.ZipFile(label_path, "w") as label_archive:
+                label_archive.writestr(
+                    "a.json", json.dumps(label, ensure_ascii=False)
+                )
+            summary, _ = evaluate_archives(
+                audio_archive=audio_path,
+                label_archive=label_path,
+                transcriber=FakeTranscriber(),
+                terms=["가스"],
+                model="fixture",
+                device="cpu",
+                compute_type="int8",
+                dataset_provenance={
+                    "dataset_id": "fixture-dev",
+                    "dataset_version": "1",
+                    "evaluation_id": "fixture-dev-wind-1",
+                    "record_count": 1,
+                    "usage_role": "development",
+                    "evidence_scope": "procedural wind; not field-radio validation",
+                    "split": "Training internal dev",
+                    "condition": "wind_snr0",
+                },
+                variants=("baseline",),
+            )
+
+            self.assertEqual("development", summary["usage_role"])
+            self.assertEqual("fixture-dev-wind-1", summary["experiment_id"])
+            self.assertEqual(
+                "procedural wind; not field-radio validation",
+                summary["evidence_scope"],
+            )
+            self.assertEqual("Training internal dev", summary["dataset"]["split"])
+            self.assertEqual("wind_snr0", summary["dataset"]["condition"])
+
 
 if __name__ == "__main__":
     unittest.main()
