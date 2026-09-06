@@ -14,6 +14,9 @@ from .provenance import sha256_file
 
 PROTOCOL_ID = "whisper-small-lora-gwangju-v1"
 SPLIT_PROTOCOL_ID = "whisper-lora-gwangju-train-dev-v1"
+DATASET_ID = "aihub_71768_gwangju_fire"
+DATASET_VERSION = "dataset-71768_downloaded-2026-09-05"
+EVIDENCE_SCOPE = "AIHub 신고전화와 절차적 모의 통신 왜곡; 실제 현장 무전 검증 아님"
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 ALLOWED_FACT_STATUS = "설계 완료·구현 전"
 
@@ -51,6 +54,7 @@ def load_experiment_config(path: Path) -> tuple[dict[str, object], bytes]:
         config.get("schema_version") != "1.0.0"
         or config.get("protocol_id") != PROTOCOL_ID
         or config.get("fact_status") != ALLOWED_FACT_STATUS
+        or config.get("evidence_scope") != EVIDENCE_SCOPE
     ):
         raise ValueError("unsupported or incorrectly stated LoRA protocol")
     data = _object(config.get("data"), "config.data")
@@ -61,7 +65,11 @@ def load_experiment_config(path: Path) -> tuple[dict[str, object], bytes]:
     cost = _object(config.get("cost_guard"), "config.cost_guard")
     adoption = _object(config.get("adoption"), "config.adoption")
 
-    if data.get("split_protocol_id") != SPLIT_PROTOCOL_ID:
+    if (
+        data.get("dataset_id") != DATASET_ID
+        or data.get("dataset_version") != DATASET_VERSION
+        or data.get("split_protocol_id") != SPLIT_PROTOCOL_ID
+    ):
         raise ValueError("config split protocol is not pinned")
     for field in ("split_manifest_sha256", "priority_terms_sha256"):
         _sha256(data.get(field), f"config.data.{field}")
@@ -191,8 +199,8 @@ def validate_lora_preflight(
     if observed_split_sha256 != data["split_manifest_sha256"]:
         raise ValueError("split manifest SHA-256 does not match the experiment config")
     if (
-        split_manifest.get("dataset_id") != data.get("dataset_id")
-        or split_manifest.get("dataset_version") != data.get("dataset_version")
+        split_manifest.get("dataset_id") != DATASET_ID
+        or split_manifest.get("dataset_version") != DATASET_VERSION
         or split_manifest.get("usage_role") != "training"
     ):
         raise ValueError("split manifest dataset contract does not match")
@@ -301,8 +309,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--generated-at")
     args = parser.parse_args(argv)
-    if args.output.exists():
-        raise FileExistsError(f"refusing to overwrite preflight report: {args.output}")
     report = validate_lora_preflight(
         config_path=args.config,
         split_manifest_path=args.split_manifest,
@@ -312,10 +318,13 @@ def main(argv: list[str] | None = None) -> int:
         generated_at=args.generated_at,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(
-        json.dumps(report, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    try:
+        with args.output.open("x", encoding="utf-8") as destination:
+            destination.write(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    except FileExistsError as error:
+        raise FileExistsError(
+            f"refusing to overwrite preflight report: {args.output}"
+        ) from error
     print(
         json.dumps(
             {

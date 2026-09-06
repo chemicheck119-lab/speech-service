@@ -8,6 +8,7 @@ import unittest
 
 from chemicheck119_speech.lora_protocol import (
     load_experiment_config,
+    main,
     validate_lora_preflight,
 )
 
@@ -119,6 +120,51 @@ class LoraProtocolTest(unittest.TestCase):
             path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "cost guard"):
                 load_experiment_config(path)
+
+    def test_config_rejects_unpinned_identity_and_evidence_scope(self) -> None:
+        for field, value in (
+            ("dataset_id", ""),
+            ("dataset_version", None),
+        ):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as directory:
+                payload = json.loads(CONFIG.read_text(encoding="utf-8"))
+                payload["data"][field] = value
+                path = Path(directory) / "unsafe.json"
+                path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "split protocol"):
+                    load_experiment_config(path)
+
+        with tempfile.TemporaryDirectory() as directory:
+            payload = json.loads(CONFIG.read_text(encoding="utf-8"))
+            payload["evidence_scope"] = "실제 현장 무전 검증 완료"
+            path = Path(directory) / "unsafe.json"
+            path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "incorrectly stated"):
+                load_experiment_config(path)
+
+    def test_cli_uses_atomic_no_clobber_output(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            inputs = _fixture(root)
+            output = root / "report.json"
+            output.write_text("existing", encoding="utf-8")
+            arguments = [
+                "--config",
+                str(inputs["config_path"]),
+                "--split-manifest",
+                str(inputs["split_manifest_path"]),
+                "--audio-archive",
+                str(inputs["audio_archive"]),
+                "--label-archive",
+                str(inputs["label_archive"]),
+                "--priority-terms",
+                str(inputs["priority_terms_path"]),
+                "--output",
+                str(output),
+            ]
+            with self.assertRaisesRegex(FileExistsError, "overwrite"):
+                main(arguments)
+            self.assertEqual("existing", output.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
