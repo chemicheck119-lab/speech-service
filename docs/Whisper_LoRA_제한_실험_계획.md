@@ -6,7 +6,8 @@
 
 - 목표: 광주 Training 내부 dev에서 clean 성능과 오삽입을 지키면서 `wind_snr0`의 `연기`
   누락을 줄일 수 있는지 검증
-- 현재 상태: data·tokenizer preflight와 local MPS harness는 **구현 완료**, 전체 학습은 **실행 전**
+- 현재 상태: data·tokenizer preflight와 local MPS harness는 **구현 완료**, 첫 FP16 MPS
+  실행은 수치 불안정으로 **기각**, FP32 원인 분리 smoke는 실행 전
 - 실행 허용: 증분 서버비 0원 확인과 고정 MPS runtime 검증 뒤 명시적 1회 실행만 허용
 - 데이터 범위: AIHub 신고전화와 절차적 모의 왜곡, 실제 현장 무전 아님
 
@@ -133,3 +134,30 @@ private staging 경로만 정리합니다.
 A/B/C 변환·잠금 dev·downstream 안전 Gate를 모두 통과하기 전에는 정확도 향상이나 채택을
 주장하지 않습니다. 소유한 M4 실행의 증분 서버 비용은 0원이며, 기존 보수적 개발비 ceiling
 50,000원은 그대로 기록합니다. 실행 직전 확인서는 별도로 생성·해시 고정합니다.
+
+## 1차 FP16 MPS 실패 기록
+
+- authorization: `lora-20260907-006`(소진, 재사용 금지)
+- 관측 지점: 25/1136 step
+- 관측값: loss 12157.4975, gradient norm NaN
+- 조치: 30 step에서 수동 중단
+- 산출물: adapter·training report 없음, private staging/work 정리 확인
+- 추가 서버 비용: 0원
+- 결정: **해당 FP16 실행 기각, 기준선 유지**
+
+이 결과로 LoRA의 성능을 판단할 수는 없습니다. 다음 실험은 동일 데이터의 소규모 FP32 MPS
+smoke에서 유한 loss·gradient, 실제 LoRA parameter update를 모두 확인하는 원인 분리
+실험입니다. 이를 통과한 경우에만 새 commit·확인서·single-use authorization으로 전체
+학습을 한 번 실행합니다.
+
+## A/B/C 변환 Gate
+
+유효 adapter의 training report가 모든 출력 artifact hash와 일치할 때만 다음을 생성합니다.
+
+1. A: 외부에 고정한 현재 `Systran/faster-whisper-small` 기준선
+2. B: 고정 OpenAI base를 C와 같은 CTranslate2 4.8.2·FP16 설정으로 변환한 control
+3. C: adapter를 base에 `safe_merge`한 뒤 B와 같은 설정으로 변환한 candidate
+
+변환 보고서는 학습 commit과 변환기 commit, base revision, converter version, B·C artifact
+hash를 기록합니다. 변환 성공은 비교 가능성만 뜻하며 정확도·안전·채택 주장을 허용하지
+않습니다.
