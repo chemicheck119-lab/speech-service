@@ -225,7 +225,8 @@ fail-closed로 확인합니다.
 - Python 3.12, CUDA 12.9, PyTorch 2.9.x, 고정 package 버전, 단일 T4
 - 24시간 이내의 현재 가격표와 20,000원 실험·70,000원 전체 비용 상한
 - record 단위 고정 60:40 clean/`wind_snr0` 배정과 발화 1회 학습
-- 명시적 1회 실행 확인문, 3시간 process/VM 제한, retry 0, CPU fallback 금지
+- commit-bound 단일 사용 authorization과 원격 원자적 claim
+- 명시적 1회 실행 확인문, 9,600초 내부 deadline, retry 0, CPU fallback 금지
 
 가격표는 `whisper-small-lora-cost-quote-v1` JSON으로 GPU·vCPU·memory·100GiB boot disk,
 환율과 HTTPS 출처를 항목별로 기록합니다. 등록된 보수적 ceiling으로 계산한 이번 실험의
@@ -233,18 +234,27 @@ fail-closed로 확인합니다.
 가격표가 이보다 낮아도 25% contingency를 다시 적용합니다.
 
 ```bash
-timeout 10800 chemicheck119-speech-lora-train \
+timeout --signal=TERM --kill-after=60s 9900 chemicheck119-speech-lora-train \
   --execution-config config/whisper_lora_execution_v1.json \
   --experiment-config config/whisper_lora_experiment_v1.json \
   --artifact-root /secure/gwangju-lora-artifacts-v1 \
   --cost-quote /secure/current-cost-quote.json \
+  --authorization-claim /secure/authorization-claim.json \
   --output-dir /secure/training-run-UNIQUE \
-  --confirm-bounded-experiment RUN_BOUNDED_LORA_ONCE
+  --confirm-bounded-experiment RUN_BOUNDED_LORA_ONCE \
+  --runner-revision SPEECH_SERVICE_MERGE_COMMIT_SHA
 ```
+
+이 명령은 단독 persistent VM에서 실행하지 않습니다. `infra` 저장소의 1회성 T4 runner가
+먼저 authorization ID를 GCS에 `if-generation-match=0`으로 claim하고, process를 9,900초에
+종료하며, VM과 boot disk를 최대 10,800초에 자동 삭제하는 경우에만 실행합니다. 같은
+authorization을 다시 쓰면 학습 전에 실패하고, 재실험은 이전 독립 비용 ceiling을 누적한 새
+견적이 필요합니다.
 
 원본 full-call WAV는 선택된 조건에서 한 번만 권한 `0600` 임시 공간으로 풀고, 발화
 timestamp 구간만 8kHz→16kHz로 재표본화해 학습합니다. 임시 음성과 Trainer 작업 디렉터리는
-성공·실패와 관계없이 제거합니다. 결과 보고서에는 aggregate loss·속도·artifact hash만
+정상 종료 또는 `TERM` 시 제거합니다. 60초 후 강제 kill이나 host 장애 때는 `infra` runner의
+auto-delete disk가 최종 폐기 경계입니다. 결과 보고서에는 aggregate loss·속도·artifact hash만
 남고 전사문·주소·recordId는 포함하지 않습니다. GPU 실행 전 상태는 **구현 완료·학습 실행
 전**이며, adapter가 생겨도 잠금 dev와 downstream 안전평가 전에는 **부분 구현 또는 개발용
 데모**입니다.

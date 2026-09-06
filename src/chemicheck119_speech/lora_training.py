@@ -15,6 +15,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import sys
@@ -64,6 +65,9 @@ class TrainingExample:
 
 @dataclass(frozen=True)
 class CostDecision:
+    authorization_id: str
+    authorized_speech_revision: str
+    cumulative_development_cost_before_krw: int
     quote_sha256: str
     quoted_compute_usd_per_hour: float
     quoted_boot_disk_usd: float
@@ -73,6 +77,13 @@ class CostDecision:
     independent_total_ceiling_krw: int
     generated_at: str
     expires_at: str
+
+
+@dataclass(frozen=True)
+class AuthorizationClaim:
+    claim_sha256: str
+    remote_object_uri: str
+    claimed_at: str
 
 
 def _read_bounded_json(path: Path, name: str) -> tuple[dict[str, object], bytes]:
@@ -108,6 +119,7 @@ def validate_cost_quote(
     *,
     quote_path: Path,
     execution_config: dict[str, object],
+    runner_revision: str,
     now: datetime | None = None,
 ) -> CostDecision:
     """Validate a current itemized quote and both registered budget ceilings."""
@@ -119,6 +131,25 @@ def validate_cost_quote(
         or quote.get("currency") != "USD"
     ):
         raise ValueError("cost quote identity does not match")
+    authorization = _object(quote.get("authorization"), "cost authorization")
+    authorization_id = _non_empty_string(
+        authorization.get("id"), "cost authorization id"
+    )
+    authorized_revision = _non_empty_string(
+        authorization.get("speech_revision"), "authorized speech revision"
+    )
+    cumulative_before = authorization.get("cumulative_development_cost_before_krw")
+    if (
+        re.fullmatch(r"[a-z0-9][a-z0-9-]{7,63}", authorization_id) is None
+        or re.fullmatch(r"[0-9a-f]{40}", runner_revision) is None
+        or authorized_revision != runner_revision
+        or authorization.get("authorized_run_count") != 1
+        or authorization.get("remote_claim_required") is not True
+        or not isinstance(cumulative_before, int)
+        or isinstance(cumulative_before, bool)
+        or cumulative_before < 0
+    ):
+        raise ValueError("cost authorization does not match the single-use run")
     generated = _parse_utc(quote.get("generated_at"), "cost quote generated_at")
     expires = _parse_utc(quote.get("expires_at"), "cost quote expires_at")
     observed_now = now or datetime.now(timezone.utc)
@@ -195,15 +226,21 @@ def validate_cost_quote(
         * float(cost_guard["fx_ceiling_krw_per_usd"])
         * (1.0 + contingency)
     )
-    independent_total_ceiling = (
-        int(cost_guard["tracked_prior_development_cost_ceiling_krw"])
-        + independent_experiment_ceiling
-    )
+    if cumulative_before < int(
+        cost_guard["tracked_prior_development_cost_ceiling_krw"]
+    ):
+        raise ValueError(
+            "cost authorization understates tracked prior development cost"
+        )
+    independent_total_ceiling = cumulative_before + independent_experiment_ceiling
     if independent_experiment_ceiling > int(cost_guard["experiment_hard_cap_krw"]):
         raise ValueError("independent experiment ceiling exceeds the hard cap")
     if independent_total_ceiling > int(cost_guard["total_development_server_cap_krw"]):
         raise ValueError("independent total ceiling exceeds the development cap")
     return CostDecision(
+        authorization_id=authorization_id,
+        authorized_speech_revision=authorized_revision,
+        cumulative_development_cost_before_krw=cumulative_before,
         quote_sha256=hashlib.sha256(quote_bytes).hexdigest(),
         quoted_compute_usd_per_hour=round(compute_hour, 6),
         quoted_boot_disk_usd=round(boot_total, 6),
@@ -213,6 +250,46 @@ def validate_cost_quote(
         independent_total_ceiling_krw=independent_total_ceiling,
         generated_at=generated.isoformat().replace("+00:00", "Z"),
         expires_at=expires.isoformat().replace("+00:00", "Z"),
+    )
+
+
+def validate_authorization_claim(
+    *,
+    claim_path: Path,
+    cost: CostDecision,
+    runner_revision: str,
+    expected_gcs_prefix: str,
+    now: datetime | None = None,
+) -> AuthorizationClaim:
+    """Bind training to the receipt of an atomically created remote claim."""
+
+    claim, claim_bytes = _read_bounded_json(claim_path, "authorization claim")
+    claimed_at = _parse_utc(claim.get("claimed_at"), "authorization claimed_at")
+    observed_now = now or datetime.now(timezone.utc)
+    if observed_now.tzinfo is None or observed_now.utcoffset() is None:
+        raise ValueError("claim validation time must include a timezone")
+    observed_now = observed_now.astimezone(timezone.utc)
+    remote_uri = _non_empty_string(
+        claim.get("remote_object_uri"), "authorization remote object URI"
+    )
+    expected_suffix = f"/authorizations/{cost.authorization_id}.claimed.json"
+    if (
+        claim.get("schema_version") != "1.0.0"
+        or claim.get("protocol_id") != "whisper-small-lora-authorization-claim-v1"
+        or claim.get("authorization_id") != cost.authorization_id
+        or claim.get("speech_revision") != runner_revision
+        or claim.get("cost_quote_sha256") != cost.quote_sha256
+        or claim.get("remote_claim_created") is not True
+        or not remote_uri.startswith(expected_gcs_prefix.rstrip("/") + "/")
+        or not remote_uri.endswith(expected_suffix)
+        or claimed_at > observed_now + timedelta(minutes=5)
+        or observed_now - claimed_at > MAX_QUOTE_AGE
+    ):
+        raise ValueError("authorization claim does not match the single-use cost quote")
+    return AuthorizationClaim(
+        claim_sha256=hashlib.sha256(claim_bytes).hexdigest(),
+        remote_object_uri=remote_uri,
+        claimed_at=claimed_at.isoformat().replace("+00:00", "Z"),
     )
 
 
@@ -540,12 +617,14 @@ def _install_deadline(seconds: int) -> Callable[[], None]:
     def timeout_handler(_: int, __: object) -> None:
         raise TimeoutError("registered LoRA runtime limit reached")
 
-    previous = signal.signal(signal.SIGALRM, timeout_handler)
+    previous_alarm = signal.signal(signal.SIGALRM, timeout_handler)
+    previous_term = signal.signal(signal.SIGTERM, timeout_handler)
     signal.alarm(seconds)
 
     def restore() -> None:
         signal.alarm(0)
-        signal.signal(signal.SIGALRM, previous)
+        signal.signal(signal.SIGALRM, previous_alarm)
+        signal.signal(signal.SIGTERM, previous_term)
 
     return restore
 
@@ -556,8 +635,10 @@ def run_bounded_training(
     experiment_config_path: Path,
     artifact_root: Path,
     cost_quote_path: Path,
+    authorization_claim_path: Path,
     output_dir: Path,
     confirmation: str,
+    runner_revision: str,
 ) -> dict[str, object]:
     if confirmation != CONFIRMATION_PHRASE:
         raise PermissionError("explicit bounded-experiment confirmation is required")
@@ -568,6 +649,13 @@ def run_bounded_training(
     cost = validate_cost_quote(
         quote_path=cost_quote_path,
         execution_config=execution,
+        runner_revision=runner_revision,
+    )
+    claim = validate_authorization_claim(
+        claim_path=authorization_claim_path,
+        cost=cost,
+        runner_revision=runner_revision,
+        expected_gcs_prefix=str(execution["private_output"]["gcs_prefix"]),
     )
     runtime_report = validate_gpu_runtime(execution)
     started = datetime.now(timezone.utc)
@@ -623,7 +711,7 @@ def run_bounded_training(
     work = Path(tempfile.mkdtemp(prefix="chemicheck119-lora-work-"))
     stage.chmod(0o700)
     work.chmod(0o700)
-    runtime_limit = int(execution["runtime"]["max_runtime_seconds"])
+    runtime_limit = int(execution["runtime"]["internal_deadline_seconds"])
     remaining_seconds = runtime_limit - math.ceil(time.monotonic() - started_monotonic)
     if remaining_seconds <= 0:
         shutil.rmtree(work, ignore_errors=True)
@@ -745,6 +833,12 @@ def run_bounded_training(
             },
             "runtime": runtime_report,
             "cost_guard": {
+                "authorization_id": cost.authorization_id,
+                "authorized_speech_revision": cost.authorized_speech_revision,
+                "cumulative_development_cost_before_krw": cost.cumulative_development_cost_before_krw,
+                "authorization_claim_sha256": claim.claim_sha256,
+                "authorization_claim_uri": claim.remote_object_uri,
+                "authorization_claimed_at": claim.claimed_at,
                 "quote_sha256": cost.quote_sha256,
                 "quoted_compute_usd_per_hour": cost.quoted_compute_usd_per_hour,
                 "quoted_boot_disk_usd": cost.quoted_boot_disk_usd,
@@ -793,16 +887,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--experiment-config", type=Path, required=True)
     parser.add_argument("--artifact-root", type=Path, required=True)
     parser.add_argument("--cost-quote", type=Path, required=True)
+    parser.add_argument("--authorization-claim", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--confirm-bounded-experiment", required=True)
+    parser.add_argument("--runner-revision", required=True)
     args = parser.parse_args(argv)
     report = run_bounded_training(
         execution_config_path=args.execution_config,
         experiment_config_path=args.experiment_config,
         artifact_root=args.artifact_root,
         cost_quote_path=args.cost_quote,
+        authorization_claim_path=args.authorization_claim,
         output_dir=args.output_dir,
         confirmation=args.confirm_bounded_experiment,
+        runner_revision=args.runner_revision,
     )
     print(
         json.dumps(

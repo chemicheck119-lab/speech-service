@@ -17,7 +17,7 @@ from .lora_protocol import load_experiment_config
 EXECUTION_PROTOCOL_ID = "whisper-small-lora-gwangju-execution-v1"
 ARTIFACT_PROTOCOL_ID = "whisper-lora-clean-wind-snr0-v1"
 REGISTERED_EXECUTION_CONFIG_SHA256 = (
-    "de29a5df6c363ea305895bddc6dbeccb3aa3c116933d6ec33ca2710708004f7a"
+    "d9c9def2eb5f96360725a2978286d222ca04dd5ecdcbe5d8d6b13d6eb62a1ba1"
 )
 EXPECTED_EXPERIMENT_CONFIG_SHA256 = (
     "686d599e11837d8e7e3389e52b4045f60e0cdb056dd7f0072996fa1d48df0cb5"
@@ -237,11 +237,19 @@ def _load_execution_config(path: Path) -> tuple[dict[str, object], bytes]:
         runtime.get("gpu_count") != 1
         or runtime.get("max_instances") != 1
         or runtime.get("max_runtime_seconds") != 10800
+        or runtime.get("external_timeout_seconds") != 9900
+        or runtime.get("internal_deadline_seconds") != 9600
         or runtime.get("retry_count") != 0
         or runtime.get("require_cuda") is not True
         or runtime.get("cpu_training_fallback") is not False
     ):
         raise ValueError("runtime cost or CUDA boundary does not match")
+    cost = _object(config.get("cost_guard"), "cost guard")
+    if (
+        cost.get("current_quote_required_before_gpu") is not True
+        or cost.get("single_use_remote_claim_required") is not True
+    ):
+        raise ValueError("cost authorization boundary does not match")
     output = _object(config.get("private_output"), "private output config")
     if any(
         output.get(field) is not False

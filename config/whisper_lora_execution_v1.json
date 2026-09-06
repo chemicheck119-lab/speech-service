@@ -47,6 +47,8 @@
     "gpu_count": 1,
     "max_instances": 1,
     "max_runtime_seconds": 10800,
+    "external_timeout_seconds": 9900,
+    "internal_deadline_seconds": 9600,
     "retry_count": 0,
     "require_cuda": true,
     "cpu_training_fallback": false,
@@ -78,7 +80,8 @@
     "boot_disk_billing_ceiling_usd": 1.0,
     "fx_ceiling_krw_per_usd": 1700,
     "contingency_fraction": 0.25,
-    "current_quote_required_before_gpu": true
+    "current_quote_required_before_gpu": true,
+    "single_use_remote_claim_required": true
   },
   "known_limitations": {
     "speaker_overlap": "not_evaluated",

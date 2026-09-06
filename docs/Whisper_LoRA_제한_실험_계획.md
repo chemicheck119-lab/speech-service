@@ -114,14 +114,23 @@ tokenizer 검사에서도 이 한계는 해소되지 않습니다. 따라서 결
 6. 임시 음성·Trainer 파일은 성공과 실패 모두 제거합니다.
 
 ```bash
-timeout 10800 chemicheck119-speech-lora-train \
+timeout --signal=TERM --kill-after=60s 9900 chemicheck119-speech-lora-train \
   --execution-config config/whisper_lora_execution_v1.json \
   --experiment-config config/whisper_lora_experiment_v1.json \
   --artifact-root /secure/gwangju-lora-artifacts-v1 \
   --cost-quote /secure/current-cost-quote.json \
+  --authorization-claim /secure/authorization-claim.json \
   --output-dir /secure/training-run-UNIQUE \
-  --confirm-bounded-experiment RUN_BOUNDED_LORA_ONCE
+  --confirm-bounded-experiment RUN_BOUNDED_LORA_ONCE \
+  --runner-revision SPEECH_SERVICE_MERGE_COMMIT_SHA
 ```
+
+견적 authorization은 정확한 speech commit과 1회 실행에 결합합니다. GPU runner는 같은 ID의
+원격 claim을 GCS에 원자적으로 처음 생성한 실행만 허용합니다. 내부 Python deadline은
+9,600초, 외부 process timeout은 9,900초, VM 자동삭제는 10,800초로 계층화합니다. `TERM`은
+Python cleanup을 실행하고, 60초 뒤 강제 kill에도 auto-delete boot disk가 임시 음성을 남기지
+않습니다. 재실험 견적은 직전 독립 비용 ceiling을 누적해야 하며 전체 70,000원을 넘으면
+거부됩니다.
 
 학습 성공 직후 상태도 `trained_unvalidated`, 사실 상태는 **부분 구현 또는 개발용 데모**입니다.
 A/B/C 변환·잠금 dev·downstream 안전 Gate를 모두 통과하기 전에는 정확도 향상이나 채택을
