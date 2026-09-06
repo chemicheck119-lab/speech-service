@@ -1,0 +1,55 @@
+FROM python:3.11-slim AS builder
+
+ARG EMBED_WHISPER_MODEL=true
+ARG WHISPER_MODEL=small
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONUNBUFFERED=1 \
+    WHISPER_MODEL=${WHISPER_MODEL}
+
+WORKDIR /build
+COPY pyproject.toml README.md ./
+COPY src ./src
+RUN python -m pip wheel --no-cache-dir --wheel-dir /wheels . \
+    && python -m pip install --no-cache-dir --no-index --find-links=/wheels \
+        chemicheck119-speech
+RUN case "${EMBED_WHISPER_MODEL}" in \
+      true) python -c "import os; from faster_whisper.utils import download_model; download_model(os.environ['WHISPER_MODEL'], cache_dir='/opt/whisper-models')" ;; \
+      false) mkdir -p /opt/whisper-models ;; \
+      *) echo "EMBED_WHISPER_MODEL must be true or false" >&2; exit 2 ;; \
+    esac
+
+FROM python:3.11-slim AS runtime
+
+ARG WHISPER_MODEL=small
+ARG VCS_REF=unknown
+ARG BUILD_DATE=unknown
+LABEL org.opencontainers.image.title="케미체크119 Speech API" \
+      org.opencontainers.image.source="https://github.com/chemicheck119-lab/speech-service" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.created="${BUILD_DATE}"
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    CHEMICHECK119_SPEECH_API_HOST=0.0.0.0 \
+    CHEMICHECK119_SPEECH_API_PORT=8080 \
+    CHEMICHECK119_SPEECH_MODEL=${WHISPER_MODEL} \
+    CHEMICHECK119_SPEECH_DEVICE=cpu \
+    CHEMICHECK119_SPEECH_COMPUTE_TYPE=int8 \
+    CHEMICHECK119_SPEECH_DOWNLOAD_ROOT=/opt/whisper-models \
+    CHEMICHECK119_SPEECH_LOCAL_FILES_ONLY=true \
+    TMPDIR=/tmp/chemicheck119-speech
+
+WORKDIR /app
+COPY --from=builder /wheels /wheels
+RUN python -m pip install --no-cache-dir --no-index --find-links=/wheels \
+        chemicheck119-speech \
+    && rm -rf /wheels \
+    && useradd --create-home --uid 10001 runner \
+    && mkdir -p /tmp/chemicheck119-speech /opt/whisper-models \
+    && chown -R runner:runner /tmp/chemicheck119-speech /opt/whisper-models
+COPY --from=builder --chown=runner:runner /opt/whisper-models /opt/whisper-models
+
+USER 10001:10001
+EXPOSE 8080
+ENTRYPOINT ["chemicheck119-speech-api"]
