@@ -200,3 +200,30 @@ hash를 기록합니다. 변환 성공은 비교 가능성만 뜻하며 정확�
 A↔B CER·WER 절대 차이가 각각 0.5%p를 넘으면 비교 자체를 무효화하고 현재 기준선을
 유지합니다. B↔C clean CER 회귀 1%p, WER 회귀 1.5%p, false insertion 증가 0 조건을
 통과해도 `wind_snr0`와 downstream 안전 Gate로 진행할 수 있을 뿐 자동 채택은 금지됩니다.
+
+## `wind_snr0` 개발 평가 Gate
+
+clean Gate의 결정이 `continue_wind_and_downstream_gates`인 경우에만 B·C를 광주 Training
+내부 dev 132건의 절차적 `wind_snr0` 파생 음성에 순차 적용합니다. 이 자료는 모델 선택에
+사용하므로 `usage_role=development`, `used_for_tuning=true`로 고정하며, 독립 test나 실제
+현장 무전 검증으로 표현하지 않습니다.
+
+판정기는 config·manifest·audio·label·conversion·clean report hash와 B/C model path를
+확인하고 private record에서 CER·WER·우선용어 지표를 재계산합니다. B 대비 C의 CER 또는
+WER 상대 개선 5% 이상과 paired bootstrap 95% CI 상한 0 이하, `연기` recall +0.10,
+우선용어 F1 +0.03, false insertion 증가 0 이하, 두 arm RTF 0.5 이하를 모두 만족해야
+downstream 안전 Gate로 진행합니다. 어느 하나라도 실패하면 candidate를 기각하고 현재
+기준선을 유지합니다.
+
+```bash
+scripts/run_whisper_lora_wind_dev_once.sh \
+  /private/venv/bin/python \
+  /private/gwangju-lora-artifacts-v1 \
+  /private/conversion-run \
+  /private/abc-evaluation/abc-locked-evaluation.json \
+  /private/wind-development-evaluation-UNIQUE
+```
+
+개발 Gate 통과도 자동 채택이나 field-radio·field-safety 성능을 증명하지 않습니다. 서울·인천
+Validation은 학습·튜닝에 사용하지 않지만 현재 artifact가 없어 이 LoRA 실행의 untouched-region
+평가는 별도 미완료 Gate로 남깁니다.

@@ -254,14 +254,14 @@ def evaluate_archives(
     record_metrics: dict[str, list[RecordMetric]] = {}
     for variant, variant_rows in by_variant.items():
         aggregates[variant], record_metrics[variant] = _aggregate(variant_rows, terms)
-    is_fixed_evaluation = (
+    is_fixed_dataset_run = (
         limit is None
         and dataset_provenance is not None
         and len(stems) == int(dataset_provenance["record_count"])
     )
     experiment_id = (
         str(dataset_provenance["evaluation_id"])
-        if is_fixed_evaluation
+        if is_fixed_dataset_run
         else (
             "speech_"
             + str(
@@ -272,13 +272,26 @@ def evaluate_archives(
             + f"_smoke_{len(stems)}"
         )
     )
+    declared_usage_role = str(
+        (dataset_provenance or {}).get("usage_role", "evaluation")
+    )
+    if declared_usage_role not in {"evaluation", "development"}:
+        raise ValueError("dataset provenance usage_role is unsupported")
+    usage_role = declared_usage_role if is_fixed_dataset_run else "development"
+    evidence_scope = str(
+        (dataset_provenance or {}).get(
+            "evidence_scope",
+            "AIHub 119 emergency-call proxy; not field-radio validation",
+        )
+    )
+    split = str((dataset_provenance or {}).get("split", "Validation"))
     summary: dict[str, object] = {
         "schema_version": "1.0.0",
         "experiment_id": experiment_id,
-        "usage_role": "evaluation" if is_fixed_evaluation else "development",
+        "usage_role": usage_role,
         "generated_at": generated_at
         or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "evidence_scope": "AIHub 119 emergency-call proxy; not field-radio validation",
+        "evidence_scope": evidence_scope,
         "dataset": {
             **(dataset_provenance or {}),
             "id": (
@@ -286,7 +299,8 @@ def evaluate_archives(
                 if dataset_provenance
                 else "unbound_fixture"
             ),
-            "split": "Validation",
+            "split": split,
+            "condition": (dataset_provenance or {}).get("condition"),
             "record_count": len(stems),
             "expected_record_count": manifest_record_count,
         },

@@ -36,6 +36,8 @@ chemicheck119-speech-lora-train = "chemicheck119_speech.lora_training:main"
 chemicheck119-speech-lora-numeric-smoke = "chemicheck119_speech.lora_numeric_smoke:main"
 chemicheck119-speech-lora-convert = "chemicheck119_speech.lora_conversion:main"
 chemicheck119-speech-lora-abc-report = "chemicheck119_speech.lora_abc_report:main"
+chemicheck119-speech-lora-dev-eval = "chemicheck119_speech.lora_dev_evaluation:main"
+chemicheck119-speech-lora-wind-report = "chemicheck119_speech.lora_wind_report:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
