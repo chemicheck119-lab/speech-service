@@ -29,12 +29,14 @@ B를 두는 이유는 model revision·CTranslate2 converter 차이와 LoRA 효�
 - stable speaker ID 없음, cross-record incident ID 없음
 - train record의 60%는 clean, 40%는 `wind_snr0`; seed 9119로 한 번 고정
 - 각 발화는 1 epoch에서 한 번만 사용
-- Whisper small + PEFT LoRA(`q_proj`, `v_proj`, rank 8, alpha 16)
+- Whisper small + generic PEFT LoRA(`q_proj`, `v_proj`, rank 8, alpha 16)
 - 서울·인천·광주 Validation은 학습 및 하이퍼파라미터 선택 금지
 
 LoRA는 전체 weight를 다시 학습하지 않고 attention projection에 작은 저랭크 행렬만
 학습합니다. 비용과 저장량은 줄지만 계산 자체가 사라지지 않고, 작은 데이터에 과적합할
 가능성도 있으므로 full fine-tuning의 자동 대체제가 아닙니다.
+PEFT의 text seq2seq wrapper는 `input_ids`를 전달하지만 Whisper encoder는
+`input_features`를 받으므로 task-specific wrapper 대신 generic forwarding을 고정합니다.
 
 ## 채택 기준
 
