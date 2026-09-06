@@ -32,7 +32,7 @@
 | 제한 LoRA local MPS 학습 harness | 구현 완료·1차 FP16 실행 수치 불안정으로 기각 |
 | LoRA numeric smoke Gate | full FP32 2-step 실행·통과 |
 | LoRA A/B/C 변환 pipeline | 구현 완료·유효 adapter 부재로 실행 전 |
-| LoRA adapter·A/B/C 성능 평가 | 설계 완료·실행 전 |
+| LoRA A/B/C 잠금 평가 판정기 | 구현 완료·유효 adapter 부재로 실행 전 |
 | 화학용어 사후 자동교정 | 미구현; 원문 보존 원칙상 현재 범위 제외 |
 | 현장 무전 성능 | 검증되지 않음 |
 
@@ -316,6 +316,29 @@ chemicheck119-speech-lora-convert \
 
 adapter가 생겨도 잠금 dev와 downstream 안전평가 전 사실 상태는 **부분 구현 또는 개발용
 데모**입니다.
+
+### LoRA A/B/C 잠금 평가
+
+A·B·C를 각각 같은 광주 화재 Validation 77건, `baseline` 단일 조건, CPU int8로 실행한 뒤
+private record와 summary를 함께 판정기에 전달합니다. 판정기는 dataset fingerprint와 77개
+record pairing, reference·audio duration, 추론 설정, model arm 결합을 확인하고 private
+record에서 CER·WER·우선용어 지표를 다시 계산합니다.
+
+```bash
+chemicheck119-speech-lora-abc-report \
+  --conversion-report /private/conversion-run/conversion-report.json \
+  --experiment-config config/whisper_lora_experiment_v1.json \
+  --priority-terms config/domain_hotwords.txt \
+  --a-summary /private/A/summary.json --a-records /private/A/records.private.jsonl \
+  --b-summary /private/B/summary.json --b-records /private/B/records.private.jsonl \
+  --c-summary /private/C/summary.json --c-records /private/C/records.private.jsonl \
+  --output /private/abc-locked-evaluation.json
+```
+
+A↔B에서는 converter drift, B↔C에서는 LoRA effect를 분리하고 paired bootstrap CER·WER를
+계산합니다. clean 회귀·false insertion Gate를 통과해도 결과는 wind·downstream Gate로
+진행할 자격일 뿐이며 자동 채택을 허용하지 않습니다. 원본 전사문이 있는 세 records 파일은
+권한 `0600`인 비공개 경로만 허용합니다.
 
 ## 기본 검증
 

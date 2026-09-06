@@ -132,6 +132,54 @@ def _hash_tree(root: Path) -> list[dict[str, object]]:
     return snapshots
 
 
+def validate_conversion_output(report_path: Path) -> dict[str, object]:
+    """Verify a completed conversion report against every B/C artifact."""
+
+    root = report_path.parent
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError("conversion output must be a non-symlink directory")
+    report = _read_report(report_path)
+    if (
+        report.get("schema_version") != "1.0.0"
+        or report.get("protocol_id") != CONVERSION_PROTOCOL_ID
+        or report.get("status") != "converted_unvalidated"
+        or report.get("fact_status") != "부분 구현 또는 개발용 데모"
+        or report.get("automatic_adoption_allowed") is not False
+        or re.fullmatch(r"[0-9a-f]{40}", str(report.get("converter_revision", "")))
+        is None
+    ):
+        raise ValueError("conversion report identity or claim boundary does not match")
+    recorded = report.get("output_artifacts")
+    if not isinstance(recorded, list) or not recorded:
+        raise ValueError("conversion report has no artifact snapshots")
+    actual_paths = sorted(
+        path
+        for path in root.rglob("*")
+        if path.is_file() and path != report_path
+    )
+    if len(actual_paths) > MAX_ARTIFACT_FILES:
+        raise ValueError("conversion output has too many files")
+    actual = [_artifact_snapshot(root, path) for path in actual_paths]
+    if sum(int(item["bytes"]) for item in actual) > MAX_ARTIFACT_BYTES:
+        raise ValueError("conversion output exceeds the registered size boundary")
+    if actual != recorded:
+        raise ValueError("conversion output artifacts drifted from the report")
+    arms = _object(report.get("arms"), "conversion arms")
+    for name in ("B_same_conversion_base_control", "C_lora_merged_candidate"):
+        arm = _object(arms.get(name), f"conversion arm {name}")
+        relative = arm.get("path")
+        if not isinstance(relative, str) or Path(relative).name != relative:
+            raise ValueError("conversion arm path must be a plain directory name")
+        directory = root / relative
+        if (
+            directory.is_symlink()
+            or not (directory / "model.bin").is_file()
+            or not (directory / "config.json").is_file()
+        ):
+            raise ValueError("conversion arm model artifact is incomplete")
+    return report
+
+
 def _harden_tree(root: Path) -> None:
     root.chmod(0o700)
     for path in root.rglob("*"):

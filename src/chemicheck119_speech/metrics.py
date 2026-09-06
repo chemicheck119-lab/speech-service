@@ -133,3 +133,56 @@ def paired_bootstrap_cer_delta(
         "samples": samples,
         "seed": seed,
     }
+
+
+def paired_bootstrap_error_delta(
+    baseline: list[RecordMetric],
+    candidate: list[RecordMetric],
+    *,
+    metric: str,
+    samples: int = 2_000,
+    seed: int = 119,
+) -> dict[str, float | int | str]:
+    """Estimate a paired aggregate CER or WER difference by record bootstrap."""
+
+    if metric not in {"cer", "wer"}:
+        raise ValueError("metric must be cer or wer")
+    if len(baseline) != len(candidate) or not baseline:
+        raise ValueError("paired non-empty metric lists are required")
+    if samples <= 0:
+        raise ValueError("bootstrap samples must be positive")
+    edits_field = "character_edits" if metric == "cer" else "word_edits"
+    length_field = "reference_characters" if metric == "cer" else "reference_words"
+    for left, right in zip(baseline, candidate):
+        if getattr(left, length_field) != getattr(right, length_field):
+            raise ValueError("paired references do not share the same denominator")
+    rng = random.Random(seed)
+    deltas: list[float] = []
+    record_count = len(baseline)
+    for _ in range(samples):
+        selected = [rng.randrange(record_count) for _ in range(record_count)]
+        baseline_edits = sum(
+            getattr(baseline[index], edits_field) for index in selected
+        )
+        candidate_edits = sum(
+            getattr(candidate[index], edits_field) for index in selected
+        )
+        reference_length = sum(
+            getattr(baseline[index], length_field) for index in selected
+        )
+        deltas.append(
+            (candidate_edits - baseline_edits) / max(1, reference_length)
+        )
+    deltas.sort()
+    baseline_edits = sum(getattr(item, edits_field) for item in baseline)
+    candidate_edits = sum(getattr(item, edits_field) for item in candidate)
+    reference_length = sum(getattr(item, length_field) for item in baseline)
+    return {
+        "metric": f"candidate_{metric}_minus_baseline_{metric}",
+        "estimate": (candidate_edits - baseline_edits)
+        / max(1, reference_length),
+        "ci95_low": deltas[int(samples * 0.025)],
+        "ci95_high": deltas[min(samples - 1, int(samples * 0.975))],
+        "samples": samples,
+        "seed": seed,
+    }
