@@ -169,19 +169,19 @@ def validate_cost_quote(
         "machine_type": runtime["machine_type"],
         "gpu_type": runtime["gpu_type"],
         "gpu_count": runtime["gpu_count"],
-        "vcpu_count": 4,
-        "memory_gib": 15,
-        "boot_disk_gib": 100,
+        "vcpu_count": runtime["vcpu_count"],
+        "memory_gib": runtime["memory_gib"],
+        "boot_disk_gib": runtime["boot_disk_gib"],
         "runtime_hours": float(runtime["max_runtime_seconds"]) / 3600.0,
     }
     if resource != expected_resource:
         raise ValueError("cost quote resource does not match the registered runtime")
 
     pricing = _object(quote.get("pricing"), "cost quote pricing")
-    gpu_hour = _finite_positive(pricing.get("gpu_usd_per_hour"), "GPU price")
-    vcpu_hour = _finite_positive(pricing.get("vcpu_usd_per_hour"), "vCPU price")
-    memory_hour = _finite_positive(
-        pricing.get("memory_gib_usd_per_hour"), "memory price"
+    if pricing.get("model") != "accelerator_optimized_machine":
+        raise ValueError("cost quote pricing model does not match the registered runtime")
+    compute_hour = _finite_positive(
+        pricing.get("machine_usd_per_hour"), "machine price"
     )
     disk_month = _finite_positive(
         pricing.get("boot_disk_usd_per_gib_month"), "boot disk price"
@@ -205,8 +205,9 @@ def validate_cost_quote(
         raise ValueError("cost quote must contain HTTPS pricing and FX sources")
 
     hours = expected_resource["runtime_hours"]
-    compute_hour = gpu_hour + 4 * vcpu_hour + 15 * memory_hour
-    boot_total = disk_month * 100 * hours / month_hours
+    boot_total = (
+        disk_month * float(runtime["boot_disk_gib"]) * hours / month_hours
+    )
     total_usd = compute_hour * hours + boot_total + network_total
     cost_guard = _object(execution_config.get("cost_guard"), "cost guard")
     contingency = _finite_positive(
@@ -309,7 +310,7 @@ def validate_gpu_runtime(
     torch_module: object | None = None,
     installed_version: Callable[[str], str] = distribution_version,
 ) -> dict[str, object]:
-    """Reject any runtime other than the single registered T4 environment."""
+    """Reject any runtime other than the single registered GPU environment."""
 
     runtime = _object(execution_config.get("runtime"), "runtime config")
     if (
@@ -335,8 +336,9 @@ def validate_gpu_runtime(
     if int(cuda.device_count()) != int(runtime["gpu_count"]):
         raise RuntimeError("GPU count does not match the execution config")
     device_name = str(cuda.get_device_name(0))
-    if "T4" not in device_name.upper():
-        raise RuntimeError("GPU model does not match the registered T4")
+    expected_gpu_token = {"nvidia-l4": "L4"}.get(str(runtime["gpu_type"]))
+    if expected_gpu_token is None or expected_gpu_token not in device_name.upper():
+        raise RuntimeError("GPU model does not match the registered runtime")
     observed_packages: dict[str, str] = {}
     for package in ("transformers", "peft", "accelerate", "numpy", "scipy"):
         observed = installed_version(package)

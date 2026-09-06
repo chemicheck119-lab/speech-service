@@ -18,7 +18,7 @@ DATASET_ID = "aihub_71768_gwangju_fire"
 DATASET_VERSION = "dataset-71768_downloaded-2026-09-05"
 EVIDENCE_SCOPE = "AIHub 신고전화와 절차적 모의 통신 왜곡; 실제 현장 무전 검증 아님"
 REGISTERED_CONFIG_SHA256 = (
-    "686d599e11837d8e7e3389e52b4045f60e0cdb056dd7f0072996fa1d48df0cb5"
+    "79f3440cf6d81aa203814ca51af799c55e7b3c876c3862399e2d4686efa13f93"
 )
 REGISTERED_SPLIT_MANIFEST_SHA256 = (
     "3ef9d791c090d11a249c66468e4836f79323d4496242c5c1dd74ce071ce7300d"
@@ -176,9 +176,9 @@ def load_experiment_config(path: Path) -> tuple[dict[str, object], bytes]:
         raise ValueError("evaluation thresholds are not fully pre-registered")
     if (
         cost.get("gcp_region") != "asia-northeast3"
-        or cost.get("gpu_type") != "nvidia-tesla-t4"
+        or cost.get("gpu_type") != "nvidia-l4"
         or cost.get("gpu_count") != 1
-        or cost.get("machine_type") != "n1-standard-4"
+        or cost.get("machine_type") != "g2-standard-4"
         or cost.get("max_runtime_hours") != 3
         or cost.get("max_instances") != 1
         or cost.get("retry_count") != 0

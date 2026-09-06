@@ -5,7 +5,7 @@
   "evidence_scope": "AIHub 신고전화와 절차적 모의 통신 왜곡; 실제 현장 무전 검증 아님",
   "experiment_config": {
     "path": "config/whisper_lora_experiment_v1.json",
-    "sha256": "686d599e11837d8e7e3389e52b4045f60e0cdb056dd7f0072996fa1d48df0cb5"
+    "sha256": "79f3440cf6d81aa203814ca51af799c55e7b3c876c3862399e2d4686efa13f93"
   },
   "derived_data": {
     "artifact_protocol_id": "whisper-lora-clean-wind-snr0-v1",
@@ -37,14 +37,17 @@
   },
   "runtime": {
     "gcp_project": "chemi-check",
-    "gcp_region": "asia-northeast1",
+    "gcp_region": "asia-northeast3",
     "image_project": "deeplearning-platform-release",
     "image_name": "pytorch-2-9-cu129-ubuntu-2404-nvidia-580-v20260831",
     "python_major_minor": "3.12",
     "cuda_major_minor": "12.9",
-    "machine_type": "n1-standard-4",
-    "gpu_type": "nvidia-tesla-t4",
+    "machine_type": "g2-standard-4",
+    "gpu_type": "nvidia-l4",
     "gpu_count": 1,
+    "vcpu_count": 4,
+    "memory_gib": 16,
+    "boot_disk_gib": 100,
     "max_instances": 1,
     "max_runtime_seconds": 10800,
     "external_timeout_seconds": 9900,

@@ -36,7 +36,7 @@ LORA_NUMERIC_RUNTIME_AVAILABLE = all(
 def _quote(
     root: Path,
     *,
-    gpu_hour: float = 0.35,
+    machine_hour: float = 0.706832276,
     hours_old: int = 0,
     authorized_revision: str = RUNNER_REVISION,
     cumulative_before: int = 50_000,
@@ -60,21 +60,20 @@ def _quote(
             "remote_claim_required": True,
         },
         "resource": {
-            "gcp_region": "asia-northeast1",
-            "machine_type": "n1-standard-4",
-            "gpu_type": "nvidia-tesla-t4",
+            "gcp_region": "asia-northeast3",
+            "machine_type": "g2-standard-4",
+            "gpu_type": "nvidia-l4",
             "gpu_count": 1,
             "vcpu_count": 4,
-            "memory_gib": 15,
+            "memory_gib": 16,
             "boot_disk_gib": 100,
             "runtime_hours": 3.0,
         },
         "pricing": {
-            "gpu_usd_per_hour": gpu_hour,
-            "vcpu_usd_per_hour": 0.031611,
-            "memory_gib_usd_per_hour": 0.004237,
+            "model": "accelerator_optimized_machine",
+            "machine_usd_per_hour": machine_hour,
             "boot_disk_usd_per_gib_month": 0.13,
-            "network_transfer_usd": 0.15,
+            "network_transfer_usd": 0,
             "month_hours": 730,
         },
         "fx_krw_per_usd": 1400,
@@ -120,7 +119,7 @@ class FakeCuda:
 
     @staticmethod
     def get_device_name(_: int) -> str:
-        return "Tesla T4"
+        return "NVIDIA L4"
 
 
 class FakeTorch:
@@ -171,15 +170,15 @@ class LoraTrainingTest(unittest.TestCase):
 
     def test_cost_quote_rejects_expiry_and_compute_ceiling(self) -> None:
         execution = json.loads(EXECUTION_CONFIG.read_text(encoding="utf-8"))
-        for gpu_hour, now, message in (
-            (0.35, datetime(2026, 9, 8, 0, 0, tzinfo=timezone.utc), "current"),
+        for machine_hour, now, message in (
+            (0.706832276, datetime(2026, 9, 8, 0, 0, tzinfo=timezone.utc), "current"),
             (1.1, datetime(2026, 9, 7, 1, 0, tzinfo=timezone.utc), "compute"),
         ):
             with (
                 self.subTest(message=message),
                 tempfile.TemporaryDirectory() as directory,
             ):
-                quote = _quote(Path(directory), gpu_hour=gpu_hour)
+                quote = _quote(Path(directory), machine_hour=machine_hour)
                 with self.assertRaisesRegex(ValueError, message):
                     validate_cost_quote(
                         quote_path=quote,
@@ -247,7 +246,7 @@ class LoraTrainingTest(unittest.TestCase):
                 )
         self.assertTrue(claim.remote_object_uri.endswith(".claimed.json"))
 
-    def test_runtime_accepts_only_pinned_single_t4(self) -> None:
+    def test_runtime_accepts_only_pinned_single_l4(self) -> None:
         execution = json.loads(EXECUTION_CONFIG.read_text(encoding="utf-8"))
         packages = execution["runtime"]["packages"]
         versions = {
@@ -267,7 +266,7 @@ class LoraTrainingTest(unittest.TestCase):
                 torch_module=FakeTorch(),
                 installed_version=versions.__getitem__,
             )
-        self.assertEqual("Tesla T4", report["gpu_name"])
+        self.assertEqual("NVIDIA L4", report["gpu_name"])
         self.assertEqual(1, report["gpu_count"])
 
         class NoCudaTorch(FakeTorch):
@@ -284,6 +283,27 @@ class LoraTrainingTest(unittest.TestCase):
             validate_gpu_runtime(
                 execution,
                 torch_module=NoCudaTorch(),
+                installed_version=versions.__getitem__,
+            )
+
+        class WrongGpuTorch(FakeTorch):
+            cuda = SimpleNamespace(
+                is_available=lambda: True,
+                device_count=lambda: 1,
+                get_device_name=lambda _: "Tesla T4",
+            )
+
+        with (
+            patch.object(
+                lora_training.sys,
+                "version_info",
+                SimpleNamespace(major=3, minor=12),
+            ),
+            self.assertRaisesRegex(RuntimeError, "registered runtime"),
+        ):
+            validate_gpu_runtime(
+                execution,
+                torch_module=WrongGpuTorch(),
                 installed_version=versions.__getitem__,
             )
 
