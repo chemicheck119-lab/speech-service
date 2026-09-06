@@ -159,31 +159,27 @@ archive 한 개는 512MiB, 전체 materialize는 4GiB로 별도 제한합니다.
 아닙니다. STT 결과만으로 CAS를 확정하거나 Rule Engine을 실행할 수도 없습니다. 세부
 게이트는 [모의 통신 왜곡 STT 평가 계획](docs/모의_통신_왜곡_STT_평가_계획.md)을 따릅니다.
 
-### 서울·인천 LoRA 실행 Gate
+### 서울·인천 실행 provenance
 
-두 지역의 STT summary와 동일 Model API runtime으로 생성한 downstream 실버 보고서를
-결합합니다. Cloud Run execution의 완료 상태·Job 이름·container digest와 summary hash까지
-일치해야 합니다. 같은 왜곡 조건과 같은 공개 우선용어가 양쪽 지역에서 각각 분모 5건
-이상·Recall 0.80 미만이고, 지역별 전체 우선용어 분모 20건 이상·Recall 0.80 미만일 때만
-제한된 LoRA 대조 실험으로 진행합니다.
+두 지역의 Cloud Run execution 완료 상태·고정 Job 이름·container digest와 STT summary
+SHA-256을 결합합니다. 동일 runtime·우선용어 목록과 서로 다른 source manifest 여부만
+검사하며, 이 서비스에서 Parser·Resolver 안전 지표나 최종 LoRA 결정을 만들지 않습니다.
 
 ```bash
-chemicheck119-speech-radio-sim-gate \
+chemicheck119-speech-capture-radio-sim-provenance \
   --project chemi-check \
   --gcp-region asia-northeast3 \
   --incheon-summary /private/incheon/summary.json \
-  --incheon-downstream /private/incheon/downstream-report.json \
   --incheon-execution INCHEON_EXECUTION \
   --seoul-summary /private/seoul/summary.json \
-  --seoul-downstream /private/seoul/downstream-report.json \
   --seoul-execution SEOUL_EXECUTION \
-  --evaluator-git-commit "$(git rev-parse HEAD)" \
-  --output /private/radio-sim-cross-region-gate.json
+  --collector-git-commit "$(git rev-parse HEAD)" \
+  --output /private/radio-sim-runtime-provenance.json
 ```
 
-Gate 통과는 LoRA의 성능 개선이나 채택을 뜻하지 않습니다. 광주 Training 내부 train/dev로
-제한한 소규모 A/B 실험을 허용한다는 뜻이며, 서울·인천 결과는 학습·튜닝에 사용할 수
-없습니다. 최종 채택에는 오류 설계에 사용하지 않은 별도 잠금 평가가 필요합니다.
+최종 Gate는 이 provenance와 동일 Model API runtime으로 생성한 두 downstream 보고서를
+`analysis-engine`의 단일 비교기에 입력해 판정합니다. 서울·인천 결과는 학습·튜닝에 사용할
+수 없고, Gate 통과도 LoRA의 성능 개선이나 채택을 뜻하지 않습니다.
 
 ## 기본 검증
 
