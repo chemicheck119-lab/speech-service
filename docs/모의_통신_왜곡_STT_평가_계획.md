@@ -60,6 +60,7 @@
 |---|---|
 | 전체 18조건·해시·24시간 상한 검사 | 구현 완료 |
 | 조건별 STT·paired 변화 집계 fixture 테스트 | 구현 완료 |
+| 서울·인천 execution·summary·downstream 결합 LoRA Gate | 구현 완료 |
 | 서울·인천 승인 데이터 실행 | 설계 완료·구현 전 |
 | STT→Parser→Resolver 안전 평가 | 설계 완료·구현 전 |
 | 실제 현장 무전 성능 | 검증되지 않은 가설 |
