@@ -6,8 +6,8 @@
 
 - 목표: 광주 Training 내부 dev에서 clean 성능과 오삽입을 지키면서 `wind_snr0`의 `연기`
   누락을 줄일 수 있는지 검증
-- 현재 상태: **설계 완료·구현 전**
-- 실행 허용: preflight만 구현하며 GPU 자동 실행은 금지
+- 현재 상태: data preflight는 **구현·실행 완료**, GPU trainer는 **설계 완료·구현 전**
+- 실행 허용: data preflight까지만 허용하며 GPU 자동 실행은 금지
 - 데이터 범위: AIHub 신고전화와 절차적 모의 왜곡, 실제 현장 무전 아님
 
 서울·인천 `radio-sim-v1`에서 같은 공개 용어가 반복 누락되어 LoRA **실험 설계** Gate가
@@ -73,3 +73,22 @@ chemicheck119-speech-lora-preflight \
 결과는 화자·사고 중복을 측정할 ID가 없어 `status=limited`이며,
 `automatic_training_allowed=false`를 유지합니다. 다음 Gate는 reviewed training
 harness, immutable clean/wind artifact, 실행 직전 비용 견적입니다.
+
+## immutable data artifact preflight
+
+```bash
+chemicheck119-speech-lora-data-preflight \
+  --execution-config config/whisper_lora_execution_v1.json \
+  --experiment-config config/whisper_lora_experiment_v1.json \
+  --artifact-root /secure/gwangju-lora-artifacts-v1 \
+  --output /secure/lora-data-preflight.json
+```
+
+이 검사는 네 audio archive와 두 label archive, private ledger, 네 manifest의 SHA-256과
+크기를 확인합니다. 또한 train/dev `recordId` 중복 0, clean·`wind_snr0` membership 동일성,
+12초 발화 상한, seed 9119의 60:40 record 배정, 각 utterance 1회 선택을 집계값으로
+검증합니다. 전사문·주소·recordId는 보고서나 콘솔에 남기지 않습니다.
+
+화자와 cross-record 사고 ID가 없어 해당 overlap은 `not_evaluated`이고, pinned Whisper
+tokenizer를 아직 로드하지 않으므로 160-token 상한은 `pending`입니다. 따라서 결과 상태는
+`limited`, 학습 상태는 `설계 완료·구현 전`, 자동 학습 허용은 `false`입니다.

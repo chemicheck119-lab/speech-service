@@ -181,6 +181,25 @@ chemicheck119-speech-capture-radio-sim-provenance \
 `analysis-engine`의 단일 비교기에 입력해 판정합니다. 서울·인천 결과는 학습·튜닝에 사용할
 수 없고, Gate 통과도 LoRA의 성능 개선이나 채택을 뜻하지 않습니다.
 
+### Whisper LoRA data preflight
+
+광주 Training에서 만든 immutable clean·`wind_snr0` train/dev artifact는 학습 전에 전체
+archive·manifest SHA-256, partition membership, record 중복, utterance 길이, 60:40 조건
+배정을 다시 검증합니다. 결과는 집계값만 포함하며 원문 전사·recordId·주소를 기록하지
+않습니다.
+
+```bash
+chemicheck119-speech-lora-data-preflight \
+  --execution-config config/whisper_lora_execution_v1.json \
+  --experiment-config config/whisper_lora_experiment_v1.json \
+  --artifact-root /secure/gwangju-lora-artifacts-v1 \
+  --output /secure/lora-data-preflight.json
+```
+
+화자·사고 overlap은 원본 ID 부재로 검증할 수 없고 tokenizer token 상한도 GPU runtime에서
+확인해야 하므로 `status=limited`입니다. 이 결과는 LoRA 학습, 성능 개선, 현장 무전 성능을
+승인하지 않으며 `automatic_training_allowed=false`를 유지합니다.
+
 ## 기본 검증
 
 ```bash
