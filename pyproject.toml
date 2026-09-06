@@ -25,7 +25,7 @@ lora = [
   "numpy==2.3.5",
   "peft==0.20.0",
   "scipy==1.16.3",
-  "transformers==4.57.6",
+  "transformers==5.10.1",
 ]
 
 [project.scripts]
