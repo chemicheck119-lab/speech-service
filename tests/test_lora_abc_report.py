@@ -13,6 +13,7 @@ from chemicheck119_speech.lora_abc_report import build_abc_report
 ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENT_CONFIG = ROOT / "config" / "whisper_lora_experiment_v1.json"
 PRIORITY_TERMS = ROOT / "config" / "domain_hotwords.txt"
+LOCKED_RUNNER = ROOT / "scripts" / "run_whisper_lora_abc_locked_once.sh"
 REVISION = "5" * 40
 ARMS = (
     "A_operational_baseline",
@@ -142,6 +143,18 @@ def _evaluation_fixture(
 
 
 class LoraAbcReportTest(unittest.TestCase):
+    def test_locked_runner_pins_three_arms_and_private_outputs(self) -> None:
+        source = LOCKED_RUNNER.read_text(encoding="utf-8")
+        self.assertIn('status --porcelain', source)
+        self.assertIn('ls-remote origin refs/heads/main', source)
+        self.assertEqual(3, source.count('run_arm "'))
+        self.assertIn('--variants baseline', source)
+        self.assertIn('--device cpu', source)
+        self.assertIn('--compute-type int8', source)
+        self.assertIn('--local-files-only', source)
+        self.assertIn('chmod 600', source)
+        self.assertIn('--evaluator-revision', source)
+
     def test_accepts_paired_clean_runs_without_adopting_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -157,6 +170,7 @@ class LoraAbcReportTest(unittest.TestCase):
                 summaries={arm: inputs[arm][0] for arm in ARMS},
                 records={arm: inputs[arm][1] for arm in ARMS},
                 output_path=output,
+                evaluator_revision="c" * 40,
             )
             self.assertEqual(
                 "continue_wind_and_downstream_gates", report["decision"]
@@ -183,6 +197,7 @@ class LoraAbcReportTest(unittest.TestCase):
                     summaries={arm: inputs[arm][0] for arm in ARMS},
                     records={arm: inputs[arm][1] for arm in ARMS},
                     output_path=root / "report.json",
+                    evaluator_revision="c" * 40,
                 )
 
 

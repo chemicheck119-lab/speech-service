@@ -33,6 +33,7 @@
 | LoRA numeric smoke Gate | full FP32 2-step 실행·통과 |
 | LoRA A/B/C 변환 pipeline | 구현 완료·유효 adapter 부재로 실행 전 |
 | LoRA A/B/C 잠금 평가 판정기 | 구현 완료·유효 adapter 부재로 실행 전 |
+| LoRA A/B/C 잠금 평가 runner | 구현 완료·유효 adapter 부재로 실행 전 |
 | 화학용어 사후 자동교정 | 미구현; 원문 보존 원칙상 현재 범위 제외 |
 | 현장 무전 성능 | 검증되지 않음 |
 
@@ -332,13 +333,27 @@ chemicheck119-speech-lora-abc-report \
   --a-summary /private/A/summary.json --a-records /private/A/records.private.jsonl \
   --b-summary /private/B/summary.json --b-records /private/B/records.private.jsonl \
   --c-summary /private/C/summary.json --c-records /private/C/records.private.jsonl \
-  --output /private/abc-locked-evaluation.json
+  --output /private/abc-locked-evaluation.json \
+  --evaluator-revision "$(git rev-parse HEAD)"
 ```
 
 A↔B에서는 converter drift, B↔C에서는 LoRA effect를 분리하고 paired bootstrap CER·WER를
 계산합니다. clean 회귀·false insertion Gate를 통과해도 결과는 wind·downstream Gate로
 진행할 자격일 뿐이며 자동 채택을 허용하지 않습니다. 원본 전사문이 있는 세 records 파일은
 권한 `0600`인 비공개 경로만 허용합니다.
+
+clean main commit에서 세 arm을 순차 실행하고 판정까지 완료하려면 다음 runner를 사용합니다.
+동일한 Validation archive·manifest·priority terms, `baseline`, CPU int8, local model만
+허용하며 기존 output은 덮어쓰지 않습니다.
+
+```bash
+scripts/run_whisper_lora_abc_locked_once.sh \
+  /private/venv/bin/python \
+  /private/conversion-run \
+  /private/models/Systran--faster-whisper-small/PINNED_REVISION \
+  /private/gwangju-fire-validation \
+  /private/abc-evaluation-UNIQUE
+```
 
 ## 기본 검증
 
