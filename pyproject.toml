@@ -19,6 +19,7 @@ chemicheck119-speech-cross-region-report = "chemicheck119_speech.cross_region_re
 chemicheck119-speech-capture-runtime-provenance = "chemicheck119_speech.runtime_provenance:main"
 chemicheck119-speech-failure-analysis = "chemicheck119_speech.failure_analysis:main"
 chemicheck119-speech-capture-radio-sim-provenance = "chemicheck119_speech.radio_sim_provenance:main"
+chemicheck119-speech-lora-preflight = "chemicheck119_speech.lora_protocol:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
