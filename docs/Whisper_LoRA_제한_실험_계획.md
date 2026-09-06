@@ -8,7 +8,7 @@
   누락을 줄일 수 있는지 검증
 - 현재 상태: data·tokenizer preflight와 local MPS harness는 **구현 완료**, FP16 master
   weight 전체 실행과 FP32 master+FP16 autocast smoke는 수치 불안정으로 **기각**, full
-  FP32 smoke는 실행 전
+  FP32 smoke는 실행·통과
 - 실행 허용: 증분 서버비 0원 확인과 고정 MPS runtime 검증 뒤 명시적 1회 실행만 허용
 - 데이터 범위: AIHub 신고전화와 절차적 모의 왜곡, 실제 현장 무전 아님
 
@@ -154,6 +154,24 @@ gradient로 중단됐습니다. 다음 실험은 FP16 autocast·GradScaler를 �
 2-step smoke입니다. 각 step의 loss·gradient·LoRA parameter가 유한하고, LoRA tensor가 실제
 변경되며 표본 base tensor가 그대로인지 확인합니다. 이를 통과한 경우에만 새
 commit·확인서·single-use authorization으로 전체 학습을 한 번 실행합니다.
+
+### full FP32 smoke 실제 결과
+
+- authorization: `lora-20260907-008`(소진, 재사용 금지)
+- runner commit: `923fedb6caca21940ac3aaa88f99bf51ce2f5fef`
+- optimizer step: 2
+- loss: 10.8512, 11.3878(모두 유한·수치 이상 상한 100 미만)
+- gradient norm: 9.3629, 8.8864(모두 유한)
+- trainable LoRA tensor: 144개 중 144개 변경
+- gradient·parameter finite 검사: 각 288회
+- frozen base 표본: 변경 없음
+- report SHA-256: `1538dacd6eba183c41f6db736647dde1ce66a01b039603c0679799cd6928617d`
+- 개인정보성 필드: 전사문·주소·recordId 모두 미포함
+- 추가 서버 비용: 0원
+- 결정: **full FP32 수치 안정성 Gate 채택**
+
+이 결과는 2-step의 수치 안정성만 보여 줍니다. LoRA 정확도·안전성·현장 무전 성능을
+증명하지 않으며, 전체 학습 결과와 A/B/C 잠금 평가가 남아 있습니다.
 
 ## A/B/C 변환 Gate
 

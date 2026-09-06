@@ -30,7 +30,7 @@
 | 실시간 스트리밍 API·패드 연동 | 설계·구현 전 |
 | Whisper tokenizer·data preflight | 구현·실행 완료 |
 | 제한 LoRA local MPS 학습 harness | 구현 완료·1차 FP16 실행 수치 불안정으로 기각 |
-| LoRA numeric smoke Gate | FP32+FP16 mixed precision 실패·full FP32 실행 전 |
+| LoRA numeric smoke Gate | full FP32 2-step 실행·통과 |
 | LoRA A/B/C 변환 pipeline | 구현 완료·유효 adapter 부재로 실행 전 |
 | LoRA adapter·A/B/C 성능 평가 | 설계 완료·실행 전 |
 | 화학용어 사후 자동교정 | 미구현; 원문 보존 원칙상 현재 범위 제외 |
@@ -278,6 +278,12 @@ rate로 optimizer 2 step만 실행합니다. 각 step에서 유한 gradient와 p
 loss가 비유한 값이거나 100을 넘으면 즉시 실패합니다. LoRA tensor가 실제 변경되고 표본 base
 tensor가 그대로인 것도 확인합니다. 성공 보고서도 전체 학습을 자동 허용하거나 성능 향상을
 증명하지 않습니다.
+
+2026-09-07 full FP32 실제 실행에서는 두 loss가 10.8512·11.3878, gradient norm이
+9.3629·8.8864로 모두 유한했습니다. LoRA tensor 144개가 모두 변경됐고 표본 frozen base
+tensor는 유지됐습니다. 따라서 **full FP32 수치 안정성 Gate만 채택**했습니다. report
+SHA-256은 `1538dacd6eba183c41f6db736647dde1ce66a01b039603c0679799cd6928617d`이며,
+다음 단계는 새 single-use authorization을 사용하는 전체 1회 학습입니다.
 
 ```bash
 scripts/run_whisper_lora_mps_once.sh \
