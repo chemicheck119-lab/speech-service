@@ -18,7 +18,7 @@ DATASET_ID = "aihub_71768_gwangju_fire"
 DATASET_VERSION = "dataset-71768_downloaded-2026-09-05"
 EVIDENCE_SCOPE = "AIHub 신고전화와 절차적 모의 통신 왜곡; 실제 현장 무전 검증 아님"
 REGISTERED_CONFIG_SHA256 = (
-    "f550078ed71caca5c17f614e77880663a6eea02d384ac4a2ace2e72fa63c77d8"
+    "a97e0f7c8f9e3948f4e919e60f9a6707323c4fab89a4c2eea8f83b010ad4750a"
 )
 REGISTERED_SPLIT_MANIFEST_SHA256 = (
     "3ef9d791c090d11a249c66468e4836f79323d4496242c5c1dd74ce071ce7300d"
@@ -145,7 +145,7 @@ def load_experiment_config(path: Path) -> tuple[dict[str, object], bytes]:
         "max_gradient_norm": 1.0,
         "seed": 119,
         "parameter_dtype": "float32",
-        "mixed_precision": "fp16",
+        "mixed_precision": "none",
         "gradient_checkpointing": True,
         "language": "ko",
         "task": "transcribe",

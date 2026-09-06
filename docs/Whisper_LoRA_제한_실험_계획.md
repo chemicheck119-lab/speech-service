@@ -6,8 +6,9 @@
 
 - 목표: 광주 Training 내부 dev에서 clean 성능과 오삽입을 지키면서 `wind_snr0`의 `연기`
   누락을 줄일 수 있는지 검증
-- 현재 상태: data·tokenizer preflight와 local MPS harness는 **구현 완료**, 첫 FP16 master
-  weight 실행은 수치 불안정으로 **기각**, FP32 master weight·FP16 autocast smoke는 실행 전
+- 현재 상태: data·tokenizer preflight와 local MPS harness는 **구현 완료**, FP16 master
+  weight 전체 실행과 FP32 master+FP16 autocast smoke는 수치 불안정으로 **기각**, full
+  FP32 smoke는 실행 전
 - 실행 허용: 증분 서버비 0원 확인과 고정 MPS runtime 검증 뒤 명시적 1회 실행만 허용
 - 데이터 범위: AIHub 신고전화와 절차적 모의 왜곡, 실제 현장 무전 아님
 
@@ -147,10 +148,12 @@ A/B/C 변환·잠금 dev·downstream 안전 Gate를 모두 통과하기 전에�
 
 이 결과로 LoRA의 성능을 판단할 수는 없습니다. 실패 실행은 model parameter 자체를 FP16으로
 적재한 뒤 mixed precision을 함께 사용했습니다. 다음 실험은 model master weight를 FP32로
-유지하고 FP16 autocast·gradient scaling만 적용하는 2 optimizer-step MPS smoke입니다.
-각 step의 loss·gradient·LoRA parameter가 유한하고, LoRA tensor가 실제 변경되며 표본 base
-tensor가 그대로인지 확인합니다. 이를 통과한 경우에만 새 commit·확인서·single-use
-authorization으로 전체 학습을 한 번 실행합니다.
+유지하고 FP16 autocast·gradient scaling만 적용한 2 optimizer-step MPS smoke도 첫 step은
+loss 10.8507·gradient norm 9.9797로 유한했지만 두 번째 optimizer 직전 비유한 LoRA
+gradient로 중단됐습니다. 다음 실험은 FP16 autocast·GradScaler를 모두 끈 full FP32
+2-step smoke입니다. 각 step의 loss·gradient·LoRA parameter가 유한하고, LoRA tensor가 실제
+변경되며 표본 base tensor가 그대로인지 확인합니다. 이를 통과한 경우에만 새
+commit·확인서·single-use authorization으로 전체 학습을 한 번 실행합니다.
 
 ## A/B/C 변환 Gate
 

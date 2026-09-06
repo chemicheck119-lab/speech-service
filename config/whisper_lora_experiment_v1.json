@@ -71,7 +71,7 @@
     "max_gradient_norm": 1.0,
     "seed": 119,
     "parameter_dtype": "float32",
-    "mixed_precision": "fp16",
+    "mixed_precision": "none",
     "gradient_checkpointing": true,
     "language": "ko",
     "task": "transcribe",

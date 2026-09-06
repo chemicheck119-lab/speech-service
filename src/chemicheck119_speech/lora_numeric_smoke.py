@@ -64,9 +64,9 @@ def run_numeric_smoke(
     training = _object(experiment["training"], "experiment training")
     if (
         training.get("parameter_dtype") != "float32"
-        or training.get("mixed_precision") != "fp16"
+        or training.get("mixed_precision") != "none"
     ):
-        raise ValueError("numeric smoke requires FP32 master weights and FP16 autocast")
+        raise ValueError("numeric smoke requires full FP32 on MPS")
     cost = validate_cost_quote(
         quote_path=cost_quote_path,
         execution_config=execution,
@@ -187,7 +187,7 @@ def run_numeric_smoke(
             warmup_ratio=float(training["warmup_ratio"]),
             weight_decay=float(training["weight_decay"]),
             max_grad_norm=float(training["max_gradient_norm"]),
-            fp16=True,
+            fp16=False,
             gradient_checkpointing=bool(training["gradient_checkpointing"]),
             gradient_checkpointing_kwargs={
                 "use_reentrant": bool(
