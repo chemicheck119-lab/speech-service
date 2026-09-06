@@ -216,6 +216,7 @@ def capture_radio_sim_provenance(
             summary=summaries[region],
             summary_sha256=sha256_file(path),
         )
+        regions[region]["stt_runtime"] = runtimes[region]
     checks = {
         "same_stt_runtime": len(
             {json.dumps(value, sort_keys=True) for value in runtimes.values()}

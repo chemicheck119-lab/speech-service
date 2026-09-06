@@ -129,6 +129,9 @@ class RadioSimProvenanceTest(unittest.TestCase):
         self.assertFalse(
             payload["comparability_gate"]["final_lora_decision_made_here"]
         )
+        self.assertEqual(
+            "small", payload["regions"]["seoul"]["stt_runtime"]["model"]
+        )
         serialized = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn("sensitive@example.invalid", serialized)
         self.assertNotIn("SECRET", serialized)
