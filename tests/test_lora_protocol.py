@@ -5,7 +5,9 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
+from chemicheck119_speech import lora_protocol
 from chemicheck119_speech.lora_protocol import (
     load_experiment_config,
     main,
@@ -15,6 +17,18 @@ from chemicheck119_speech.lora_protocol import (
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "config" / "whisper_lora_experiment_v1.json"
+
+
+def _registered_fixture(inputs: dict[str, Path]):
+    return patch.multiple(
+        lora_protocol,
+        REGISTERED_CONFIG_SHA256=hashlib.sha256(
+            inputs["config_path"].read_bytes()
+        ).hexdigest(),
+        REGISTERED_SPLIT_MANIFEST_SHA256=hashlib.sha256(
+            inputs["split_manifest_path"].read_bytes()
+        ).hexdigest(),
+    )
 
 
 def _fixture(tmp_path: Path) -> dict[str, Path]:
@@ -94,10 +108,12 @@ class LoraProtocolTest(unittest.TestCase):
 
     def test_preflight_passes_without_authorizing_training(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            report = validate_lora_preflight(
-                **_fixture(Path(directory)),
-                generated_at="2026-09-06T00:00:00Z",
-            )
+            inputs = _fixture(Path(directory))
+            with _registered_fixture(inputs):
+                report = validate_lora_preflight(
+                    **inputs,
+                    generated_at="2026-09-06T00:00:00Z",
+                )
         self.assertEqual("passed", report["status"])
         self.assertIs(report["automatic_training_allowed"], False)
         self.assertEqual(74, report["dataset"]["dev_smoke_record_support"])
@@ -109,7 +125,9 @@ class LoraProtocolTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             inputs = _fixture(Path(directory))
             inputs["audio_archive"].write_bytes(b"changed")
-            with self.assertRaisesRegex(ValueError, "audio archive SHA-256"):
+            with _registered_fixture(inputs), self.assertRaisesRegex(
+                ValueError, "audio archive SHA-256"
+            ):
                 validate_lora_preflight(**inputs)
 
     def test_config_rejects_training_auto_authorization(self) -> None:
@@ -118,8 +136,10 @@ class LoraProtocolTest(unittest.TestCase):
             payload["cost_guard"]["automatic_training_allowed"] = True
             path = Path(directory) / "unsafe.json"
             path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "cost guard"):
-                load_experiment_config(path)
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            with patch.object(lora_protocol, "REGISTERED_CONFIG_SHA256", digest):
+                with self.assertRaisesRegex(ValueError, "cost guard"):
+                    load_experiment_config(path)
 
     def test_config_rejects_unpinned_identity_and_evidence_scope(self) -> None:
         for field, value in (
@@ -131,16 +151,38 @@ class LoraProtocolTest(unittest.TestCase):
                 payload["data"][field] = value
                 path = Path(directory) / "unsafe.json"
                 path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-                with self.assertRaisesRegex(ValueError, "split protocol"):
-                    load_experiment_config(path)
+                digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                with patch.object(lora_protocol, "REGISTERED_CONFIG_SHA256", digest):
+                    with self.assertRaisesRegex(ValueError, "split protocol"):
+                        load_experiment_config(path)
 
         with tempfile.TemporaryDirectory() as directory:
             payload = json.loads(CONFIG.read_text(encoding="utf-8"))
             payload["evidence_scope"] = "실제 현장 무전 검증 완료"
             path = Path(directory) / "unsafe.json"
             path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "incorrectly stated"):
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            with patch.object(lora_protocol, "REGISTERED_CONFIG_SHA256", digest):
+                with self.assertRaisesRegex(ValueError, "incorrectly stated"):
+                    load_experiment_config(path)
+
+    def test_rejects_modified_config_and_registered_input_digests(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            payload = json.loads(CONFIG.read_text(encoding="utf-8"))
+            payload["purpose"] = "변조된 목적"
+            path = root / "changed-config.json"
+            path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "registered artifact"):
                 load_experiment_config(path)
+
+            payload = json.loads(CONFIG.read_text(encoding="utf-8"))
+            payload["data"]["split_manifest_sha256"] = "b" * 64
+            path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            with patch.object(lora_protocol, "REGISTERED_CONFIG_SHA256", digest):
+                with self.assertRaisesRegex(ValueError, "not pre-registered"):
+                    load_experiment_config(path)
 
     def test_cli_uses_atomic_no_clobber_output(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -162,7 +204,9 @@ class LoraProtocolTest(unittest.TestCase):
                 "--output",
                 str(output),
             ]
-            with self.assertRaisesRegex(FileExistsError, "overwrite"):
+            with _registered_fixture(inputs), self.assertRaisesRegex(
+                FileExistsError, "overwrite"
+            ):
                 main(arguments)
             self.assertEqual("existing", output.read_text(encoding="utf-8"))
 

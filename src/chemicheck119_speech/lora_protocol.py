@@ -17,6 +17,15 @@ SPLIT_PROTOCOL_ID = "whisper-lora-gwangju-train-dev-v1"
 DATASET_ID = "aihub_71768_gwangju_fire"
 DATASET_VERSION = "dataset-71768_downloaded-2026-09-05"
 EVIDENCE_SCOPE = "AIHub 신고전화와 절차적 모의 통신 왜곡; 실제 현장 무전 검증 아님"
+REGISTERED_CONFIG_SHA256 = (
+    "686d599e11837d8e7e3389e52b4045f60e0cdb056dd7f0072996fa1d48df0cb5"
+)
+REGISTERED_SPLIT_MANIFEST_SHA256 = (
+    "3ef9d791c090d11a249c66468e4836f79323d4496242c5c1dd74ce071ce7300d"
+)
+REGISTERED_PRIORITY_TERMS_SHA256 = (
+    "1269cc8e61f8299061e061e77badcbee0670fe63421b67e733b99c252d1b67b3"
+)
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 ALLOWED_FACT_STATUS = "설계 완료·구현 전"
 
@@ -50,6 +59,8 @@ def _read_json(path: Path, name: str) -> tuple[dict[str, object], bytes]:
 
 def load_experiment_config(path: Path) -> tuple[dict[str, object], bytes]:
     config, content = _read_json(path, "experiment config")
+    if hashlib.sha256(content).hexdigest() != REGISTERED_CONFIG_SHA256:
+        raise ValueError("experiment config SHA-256 is not the registered artifact")
     if (
         config.get("schema_version") != "1.0.0"
         or config.get("protocol_id") != PROTOCOL_ID
@@ -71,8 +82,11 @@ def load_experiment_config(path: Path) -> tuple[dict[str, object], bytes]:
         or data.get("split_protocol_id") != SPLIT_PROTOCOL_ID
     ):
         raise ValueError("config split protocol is not pinned")
-    for field in ("split_manifest_sha256", "priority_terms_sha256"):
-        _sha256(data.get(field), f"config.data.{field}")
+    if (
+        data.get("split_manifest_sha256") != REGISTERED_SPLIT_MANIFEST_SHA256
+        or data.get("priority_terms_sha256") != REGISTERED_PRIORITY_TERMS_SHA256
+    ):
+        raise ValueError("config input SHA-256 values are not pre-registered")
     if data.get("train_records") != 527 or data.get("dev_records") != 132:
         raise ValueError("config record counts are not the pre-registered split")
     if data.get("dev_smoke_record_support") != 74:
