@@ -71,6 +71,7 @@ class CostDecision:
     quote_sha256: str
     quoted_compute_usd_per_hour: float
     quoted_boot_disk_usd: float
+    quoted_network_transfer_usd: float
     quoted_total_usd: float
     quoted_total_krw_with_contingency: int
     independent_experiment_ceiling_krw: int
@@ -185,6 +186,11 @@ def validate_cost_quote(
     disk_month = _finite_positive(
         pricing.get("boot_disk_usd_per_gib_month"), "boot disk price"
     )
+    network_total = _finite_positive(
+        pricing.get("network_transfer_usd"),
+        "network transfer price",
+        allow_zero=True,
+    )
     month_hours = _finite_positive(pricing.get("month_hours"), "month hours")
     fx = _finite_positive(quote.get("fx_krw_per_usd"), "FX rate")
     sources = quote.get("sources")
@@ -201,7 +207,7 @@ def validate_cost_quote(
     hours = expected_resource["runtime_hours"]
     compute_hour = gpu_hour + 4 * vcpu_hour + 15 * memory_hour
     boot_total = disk_month * 100 * hours / month_hours
-    total_usd = compute_hour * hours + boot_total
+    total_usd = compute_hour * hours + boot_total + network_total
     cost_guard = _object(execution_config.get("cost_guard"), "cost guard")
     contingency = _finite_positive(
         cost_guard.get("contingency_fraction"),
@@ -213,6 +219,8 @@ def validate_cost_quote(
         raise ValueError("quoted compute price exceeds the registered ceiling")
     if boot_total > float(cost_guard["boot_disk_billing_ceiling_usd"]):
         raise ValueError("quoted boot disk price exceeds the registered ceiling")
+    if network_total > float(cost_guard["network_transfer_billing_ceiling_usd"]):
+        raise ValueError("quoted network transfer price exceeds the registered ceiling")
     if fx > float(cost_guard["fx_ceiling_krw_per_usd"]):
         raise ValueError("quoted FX rate exceeds the registered ceiling")
     if quoted_krw > int(cost_guard["experiment_hard_cap_krw"]):
@@ -222,6 +230,7 @@ def validate_cost_quote(
         (
             float(cost_guard["compute_billing_ceiling_usd_per_hour"]) * hours
             + float(cost_guard["boot_disk_billing_ceiling_usd"])
+            + float(cost_guard["network_transfer_billing_ceiling_usd"])
         )
         * float(cost_guard["fx_ceiling_krw_per_usd"])
         * (1.0 + contingency)
@@ -244,6 +253,7 @@ def validate_cost_quote(
         quote_sha256=hashlib.sha256(quote_bytes).hexdigest(),
         quoted_compute_usd_per_hour=round(compute_hour, 6),
         quoted_boot_disk_usd=round(boot_total, 6),
+        quoted_network_transfer_usd=round(network_total, 6),
         quoted_total_usd=round(total_usd, 6),
         quoted_total_krw_with_contingency=quoted_krw,
         independent_experiment_ceiling_krw=independent_experiment_ceiling,
@@ -842,6 +852,7 @@ def run_bounded_training(
                 "quote_sha256": cost.quote_sha256,
                 "quoted_compute_usd_per_hour": cost.quoted_compute_usd_per_hour,
                 "quoted_boot_disk_usd": cost.quoted_boot_disk_usd,
+                "quoted_network_transfer_usd": cost.quoted_network_transfer_usd,
                 "quoted_total_usd": cost.quoted_total_usd,
                 "quoted_total_krw_with_contingency": cost.quoted_total_krw_with_contingency,
                 "independent_experiment_ceiling_krw": cost.independent_experiment_ceiling_krw,

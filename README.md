@@ -222,7 +222,7 @@ base 병합, CTranslate2 변환, 운영 채택·배포는 수행하지 않습니
 fail-closed로 확인합니다.
 
 - 등록된 config·data artifact SHA-256과 tokenizer 160-token 상한
-- Python 3.12, CUDA 12.9, PyTorch 2.9.x, 고정 package 버전, 단일 T4
+- 도쿄 `asia-northeast1`의 Python 3.12, CUDA 12.9, PyTorch 2.9.x, 단일 T4
 - 24시간 이내의 현재 가격표와 20,000원 실험·70,000원 전체 비용 상한
 - record 단위 고정 60:40 clean/`wind_snr0` 배정과 발화 1회 학습
 - commit-bound 단일 사용 authorization과 원격 원자적 claim
@@ -230,7 +230,8 @@ fail-closed로 확인합니다.
 
 가격표는 `whisper-small-lora-cost-quote-v1` JSON으로 GPU·vCPU·memory·100GiB boot disk,
 환율과 HTTPS 출처를 항목별로 기록합니다. 등록된 보수적 ceiling으로 계산한 이번 실험의
-독립 상한은 8,500원, 이전 개발비 ceiling을 합친 상한은 58,500원입니다. 실제 실행 직전
+서울 두 zone의 T4 재고 부족 뒤 아시아 리전 간 전송비 ceiling $0.25를 추가했습니다. 독립
+상한은 9,032원, 이전 개발비 ceiling을 합친 상한은 59,032원입니다. 실제 실행 직전
 가격표가 이보다 낮아도 25% contingency를 다시 적용합니다.
 
 ```bash

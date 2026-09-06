@@ -60,7 +60,7 @@ def _quote(
             "remote_claim_required": True,
         },
         "resource": {
-            "gcp_region": "asia-northeast3",
+            "gcp_region": "asia-northeast1",
             "machine_type": "n1-standard-4",
             "gpu_type": "nvidia-tesla-t4",
             "gpu_count": 1,
@@ -74,6 +74,7 @@ def _quote(
             "vcpu_usd_per_hour": 0.031611,
             "memory_gib_usd_per_hour": 0.004237,
             "boot_disk_usd_per_gib_month": 0.13,
+            "network_transfer_usd": 0.15,
             "month_hours": 730,
         },
         "fx_krw_per_usd": 1400,
@@ -164,8 +165,8 @@ class LoraTrainingTest(unittest.TestCase):
             )
             quote_sha256 = hashlib.sha256(quote.read_bytes()).hexdigest()
         self.assertLess(decision.quoted_total_krw_with_contingency, 20_000)
-        self.assertEqual(8_500, decision.independent_experiment_ceiling_krw)
-        self.assertEqual(58_500, decision.independent_total_ceiling_krw)
+        self.assertEqual(9_032, decision.independent_experiment_ceiling_krw)
+        self.assertEqual(59_032, decision.independent_total_ceiling_krw)
         self.assertEqual(quote_sha256, decision.quote_sha256)
 
     def test_cost_quote_rejects_expiry_and_compute_ceiling(self) -> None:
