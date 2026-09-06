@@ -1,0 +1,116 @@
+{
+  "schema_version": "1.0.0",
+  "protocol_id": "whisper-small-lora-gwangju-v1",
+  "fact_status": "설계 완료·구현 전",
+  "purpose": "광주 Training 내부 dev의 clean·wind_snr0에서 반복된 연기 누락을 줄이되 오삽입과 clean 성능을 훼손하지 않는지 검증",
+  "evidence_scope": "AIHub 신고전화와 절차적 모의 통신 왜곡; 실제 현장 무전 검증 아님",
+  "error_signal": {
+    "condition": "wind_snr0",
+    "priority_term": "연기",
+    "incheon_record_support": 18,
+    "incheon_recall": 0.6666666666666666,
+    "seoul_record_support": 18,
+    "seoul_recall": 0.7222222222222222,
+    "lora_gate_sha256": "2e681817780ecb1385271cff41adedcad8245ac25d985d64ff54dfe2569e13e9"
+  },
+  "data": {
+    "dataset_id": "aihub_71768_gwangju_fire",
+    "dataset_version": "dataset-71768_downloaded-2026-09-05",
+    "split_protocol_id": "whisper-lora-gwangju-train-dev-v1",
+    "split_manifest_sha256": "3ef9d791c090d11a249c66468e4836f79323d4496242c5c1dd74ce071ce7300d",
+    "priority_terms_sha256": "1269cc8e61f8299061e061e77badcbee0670fe63421b67e733b99c252d1b67b3",
+    "train_records": 527,
+    "dev_records": 132,
+    "dev_utterances": 4750,
+    "dev_smoke_record_support": 74,
+    "dev_smoke_utterance_support": 261,
+    "train_condition_assignment": {
+      "unit": "recordId group",
+      "clean_fraction": 0.6,
+      "wind_snr0_fraction": 0.4,
+      "seed": 9119,
+      "each_utterance_seen_once": true
+    },
+    "train_partitions_forbidden": [
+      "Gwangju Validation",
+      "Seoul Validation",
+      "Incheon Validation"
+    ]
+  },
+  "models": {
+    "operational_baseline": {
+      "id": "Systran/faster-whisper-small",
+      "revision": "536b0662742c02347bc0e980a01041f333bce120"
+    },
+    "transformers_base": {
+      "id": "openai/whisper-small",
+      "revision": "973afd24965f72e36ca33b3055d56a652f456b4d"
+    },
+    "comparison_arms": [
+      "A_operational_baseline",
+      "B_same_conversion_base_control",
+      "C_lora_merged_candidate"
+    ]
+  },
+  "lora": {
+    "task_type": "SEQ_2_SEQ_LM",
+    "rank": 8,
+    "alpha": 16,
+    "dropout": 0.05,
+    "bias": "none",
+    "target_modules": ["q_proj", "v_proj"]
+  },
+  "training": {
+    "epochs": 1,
+    "learning_rate": 0.0001,
+    "per_device_batch_size": 4,
+    "gradient_accumulation_steps": 4,
+    "effective_batch_size": 16,
+    "warmup_ratio": 0.05,
+    "weight_decay": 0.01,
+    "max_gradient_norm": 1.0,
+    "seed": 119,
+    "fp16": true,
+    "gradient_checkpointing": true,
+    "language": "ko",
+    "task": "transcribe",
+    "max_audio_seconds": 12.0,
+    "max_label_tokens": 160,
+    "intermediate_dev_selection": false,
+    "retry_count": 0
+  },
+  "evaluation": {
+    "bootstrap_samples": 2000,
+    "bootstrap_seed": 119,
+    "clean_cer_max_absolute_regression": 0.01,
+    "clean_wer_max_absolute_regression": 0.015,
+    "wind_cer_or_wer_min_relative_improvement": 0.05,
+    "wind_improved_metric_ci95_upper_max": 0.0,
+    "wind_smoke_recall_min_absolute_improvement": 0.1,
+    "wind_priority_f1_min_absolute_improvement": 0.03,
+    "false_insertion_max_increase": 0,
+    "operational_to_conversion_control_cer_max_absolute_regression": 0.005,
+    "operational_to_conversion_control_wer_max_absolute_regression": 0.005,
+    "max_real_time_factor": 0.5,
+    "downstream_silver_top3_max_regression": 0.0,
+    "wrong_single_cas_promotion_max": 0,
+    "preconfirmation_rule_execution_max": 0
+  },
+  "cost_guard": {
+    "gcp_region": "asia-northeast3",
+    "gpu_type": "nvidia-tesla-t4",
+    "gpu_count": 1,
+    "machine_type": "n1-standard-4",
+    "max_runtime_hours": 3,
+    "max_instances": 1,
+    "retry_count": 0,
+    "experiment_hard_cap_krw": 20000,
+    "total_development_server_cap_krw": 70000,
+    "automatic_training_allowed": false
+  },
+  "adoption": {
+    "maximum_without_untouched_region": "조건부 채택·development preview 전용",
+    "production_default_allowed": false,
+    "field_safety_claim_allowed": false
+  }
+}
