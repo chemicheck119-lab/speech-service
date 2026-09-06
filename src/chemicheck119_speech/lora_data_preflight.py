@@ -17,7 +17,7 @@ from .lora_protocol import load_experiment_config
 EXECUTION_PROTOCOL_ID = "whisper-small-lora-gwangju-execution-v1"
 ARTIFACT_PROTOCOL_ID = "whisper-lora-clean-wind-snr0-v1"
 REGISTERED_EXECUTION_CONFIG_SHA256 = (
-    "23bccc8be49d60ae5eccddc8958f1c7022c06dad1caf511bca44d036011d8a23"
+    "de29a5df6c363ea305895bddc6dbeccb3aa3c116933d6ec33ca2710708004f7a"
 )
 EXPECTED_EXPERIMENT_CONFIG_SHA256 = (
     "686d599e11837d8e7e3389e52b4045f60e0cdb056dd7f0072996fa1d48df0cb5"
@@ -413,13 +413,14 @@ def _partition_labels(
     return record_ids, utterance_counts, total_utterances, maximum_duration
 
 
-def _training_assignment(
+def training_condition_assignments(
     record_ids: set[str],
-    utterance_counts: dict[str, int],
     *,
     seed: int,
     clean_fraction: float,
-) -> dict[str, dict[str, int]]:
+) -> dict[str, str]:
+    """Return the registered record-level arm without exposing it in reports."""
+
     ordered = sorted(
         record_ids,
         key=lambda record_id: (
@@ -433,12 +434,29 @@ def _training_assignment(
     if clean_count <= 0 or clean_count >= len(ordered):
         raise ValueError("training condition assignment produced an empty arm")
     clean = set(ordered[:clean_count])
+    return {
+        record_id: "clean" if record_id in clean else "wind_snr0"
+        for record_id in ordered
+    }
+
+
+def _training_assignment(
+    record_ids: set[str],
+    utterance_counts: dict[str, int],
+    *,
+    seed: int,
+    clean_fraction: float,
+) -> dict[str, dict[str, int]]:
+    assignments = training_condition_assignments(
+        record_ids,
+        seed=seed,
+        clean_fraction=clean_fraction,
+    )
     result = {
         condition: {"record_count": 0, "utterance_count": 0}
         for condition in CONDITIONS
     }
-    for record_id in ordered:
-        condition = "clean" if record_id in clean else "wind_snr0"
+    for record_id, condition in assignments.items():
         result[condition]["record_count"] += 1
         result[condition]["utterance_count"] += utterance_counts[record_id]
     if sum(item["record_count"] for item in result.values()) != len(record_ids):

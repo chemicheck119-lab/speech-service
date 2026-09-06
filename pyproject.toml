@@ -12,6 +12,15 @@ dependencies = [
   "google-cloud-storage==3.3.1",
 ]
 
+[project.optional-dependencies]
+lora = [
+  "accelerate==1.14.0",
+  "numpy==2.3.5",
+  "peft==0.20.0",
+  "scipy==1.16.3",
+  "transformers==4.57.6",
+]
+
 [project.scripts]
 chemicheck119-speech-eval = "chemicheck119_speech.cli:main"
 chemicheck119-speech-robustness-eval = "chemicheck119_speech.robustness:main"
@@ -21,6 +30,8 @@ chemicheck119-speech-failure-analysis = "chemicheck119_speech.failure_analysis:m
 chemicheck119-speech-capture-radio-sim-provenance = "chemicheck119_speech.radio_sim_provenance:main"
 chemicheck119-speech-lora-preflight = "chemicheck119_speech.lora_protocol:main"
 chemicheck119-speech-lora-data-preflight = "chemicheck119_speech.lora_data_preflight:main"
+chemicheck119-speech-lora-tokenizer-preflight = "chemicheck119_speech.lora_tokenizer_preflight:main"
+chemicheck119-speech-lora-train = "chemicheck119_speech.lora_training:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

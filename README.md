@@ -26,9 +26,11 @@
 | AIHub 신고음성 ZIP 로딩·고정 77건 평가 | 구현·실행 완료 |
 | 기본 전사 vs hotword 힌트 A/B | 측정 완료·hotword 기본값 제외 |
 | `radio-sim-v1` paired 강건성 평가 실행기 | 부분 구현 또는 개발용 데모 |
-| 서울·인천 모의 통신 왜곡 실제 측정 | 설계 완료·실행 전 |
+| 서울·인천 신고음성·모의 통신 왜곡 평가 | 구현·실행 완료(실제 현장 무전 아님) |
 | 실시간 스트리밍 API·패드 연동 | 설계·구현 전 |
-| 파인튜닝·새 모델 가중치 | 구현 전 |
+| Whisper tokenizer·data preflight | 구현·실행 완료 |
+| 제한 LoRA GPU 학습 harness | 구현 완료·GPU 실행 전 |
+| LoRA adapter·A/B/C 성능 평가 | 설계 완료·실행 전 |
 | 화학용어 사후 자동교정 | 미구현; 원문 보존 원칙상 현재 범위 제외 |
 | 현장 무전 성능 | 검증되지 않음 |
 
@@ -199,6 +201,53 @@ chemicheck119-speech-lora-data-preflight \
 화자·사고 overlap은 원본 ID 부재로 검증할 수 없고 tokenizer token 상한도 GPU runtime에서
 확인해야 하므로 `status=limited`입니다. 이 결과는 LoRA 학습, 성능 개선, 현장 무전 성능을
 승인하지 않으며 `automatic_training_allowed=false`를 유지합니다.
+
+고정 `openai/whisper-small` tokenizer로 별도 검사를 실행하면 모든 label을 truncation 없이
+세되, 결과에는 구간별 원문이나 recordId를 남기지 않습니다. 현재 광주 train/dev artifact의
+최대치는 58 tokens였고 160-token 상한 초과는 0건입니다. 이 수치는 학습 적합성 중
+token-length 조건만 확인하며 모델 개선을 뜻하지 않습니다.
+
+```bash
+chemicheck119-speech-lora-tokenizer-preflight \
+  --execution-config config/whisper_lora_execution_v1.json \
+  --experiment-config config/whisper_lora_experiment_v1.json \
+  --artifact-root /secure/gwangju-lora-artifacts-v1 \
+  --output /secure/lora-tokenizer-preflight.json
+```
+
+### 제한 LoRA 학습 harness
+
+GPU harness는 학습만 수행하고 adapter를 `trained_unvalidated`로 저장합니다. 성능 평가,
+base 병합, CTranslate2 변환, 운영 채택·배포는 수행하지 않습니다. 실행 전 다음 조건을 모두
+fail-closed로 확인합니다.
+
+- 등록된 config·data artifact SHA-256과 tokenizer 160-token 상한
+- Python 3.12, CUDA 12.9, PyTorch 2.9.x, 고정 package 버전, 단일 T4
+- 24시간 이내의 현재 가격표와 20,000원 실험·70,000원 전체 비용 상한
+- record 단위 고정 60:40 clean/`wind_snr0` 배정과 발화 1회 학습
+- 명시적 1회 실행 확인문, 3시간 process/VM 제한, retry 0, CPU fallback 금지
+
+가격표는 `whisper-small-lora-cost-quote-v1` JSON으로 GPU·vCPU·memory·100GiB boot disk,
+환율과 HTTPS 출처를 항목별로 기록합니다. 등록된 보수적 ceiling으로 계산한 이번 실험의
+독립 상한은 8,500원, 이전 개발비 ceiling을 합친 상한은 58,500원입니다. 실제 실행 직전
+가격표가 이보다 낮아도 25% contingency를 다시 적용합니다.
+
+```bash
+timeout 10800 chemicheck119-speech-lora-train \
+  --execution-config config/whisper_lora_execution_v1.json \
+  --experiment-config config/whisper_lora_experiment_v1.json \
+  --artifact-root /secure/gwangju-lora-artifacts-v1 \
+  --cost-quote /secure/current-cost-quote.json \
+  --output-dir /secure/training-run-UNIQUE \
+  --confirm-bounded-experiment RUN_BOUNDED_LORA_ONCE
+```
+
+원본 full-call WAV는 선택된 조건에서 한 번만 권한 `0600` 임시 공간으로 풀고, 발화
+timestamp 구간만 8kHz→16kHz로 재표본화해 학습합니다. 임시 음성과 Trainer 작업 디렉터리는
+성공·실패와 관계없이 제거합니다. 결과 보고서에는 aggregate loss·속도·artifact hash만
+남고 전사문·주소·recordId는 포함하지 않습니다. GPU 실행 전 상태는 **구현 완료·학습 실행
+전**이며, adapter가 생겨도 잠금 dev와 downstream 안전평가 전에는 **부분 구현 또는 개발용
+데모**입니다.
 
 ## 기본 검증
 
