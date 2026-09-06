@@ -6,8 +6,8 @@ REPOSITORY_ROOT="$(cd "${SCRIPT_DIRECTORY}/.." && pwd)"
 EXECUTION_CONFIG="${REPOSITORY_ROOT}/config/whisper_lora_execution_v1.json"
 EXPERIMENT_CONFIG="${REPOSITORY_ROOT}/config/whisper_lora_experiment_v1.json"
 
-if (( $# != 4 )); then
-  echo "usage: $0 PYTHON_BIN ARTIFACT_ROOT COST_QUOTE OUTPUT_DIR" >&2
+if (( $# < 4 || $# > 5 )); then
+  echo "usage: $0 PYTHON_BIN ARTIFACT_ROOT COST_QUOTE OUTPUT_DIR [train|numeric-smoke]" >&2
   exit 1
 fi
 
@@ -15,6 +15,11 @@ PYTHON_BIN="$1"
 ARTIFACT_ROOT="$2"
 COST_QUOTE="$3"
 OUTPUT_DIR="$4"
+RUN_MODE="${5:-train}"
+if [[ "${RUN_MODE}" != "train" && "${RUN_MODE}" != "numeric-smoke" ]]; then
+  echo "run mode must be train or numeric-smoke" >&2
+  exit 1
+fi
 
 for command in git gcloud caffeinate; do
   command -v "${command}" >/dev/null 2>&1 || {
@@ -160,8 +165,15 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+RUN_MODULE="chemicheck119_speech.lora_training"
+EXPECTED_REPORT="training-report.json"
+if [[ "${RUN_MODE}" == "numeric-smoke" ]]; then
+  RUN_MODULE="chemicheck119_speech.lora_numeric_smoke"
+  EXPECTED_REPORT="numeric-smoke-report.json"
+fi
+
 caffeinate -dimsu env PYTHONPATH="${REPOSITORY_ROOT}/src" \
-  "${PYTHON_BIN}" -m chemicheck119_speech.lora_training \
+  "${PYTHON_BIN}" -m "${RUN_MODULE}" \
   --execution-config "${EXECUTION_CONFIG}" \
   --experiment-config "${EXPERIMENT_CONFIG}" \
   --artifact-root "${ARTIFACT_ROOT}" \
@@ -194,9 +206,9 @@ WATCHDOG_PID=""
 if (( STATUS != 0 )); then
   exit "${STATUS}"
 fi
-if [[ ! -f "${OUTPUT_DIR}/training-report.json" ]]; then
-  echo "training completed without the registered aggregate report" >&2
+if [[ ! -f "${OUTPUT_DIR}/${EXPECTED_REPORT}" ]]; then
+  echo "run completed without the registered aggregate report" >&2
   exit 1
 fi
 
-echo "bounded local MPS training completed: ${OUTPUT_DIR}/training-report.json"
+echo "bounded local MPS ${RUN_MODE} completed: ${OUTPUT_DIR}/${EXPECTED_REPORT}"

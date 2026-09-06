@@ -14,7 +14,10 @@ from chemicheck119_speech import lora_data_preflight, lora_training
 from chemicheck119_speech.lora_data_preflight import validate_lora_data_preflight
 from chemicheck119_speech.lora_training import (
     CONFIRMATION_PHRASE,
+    MAX_PLAUSIBLE_TRAIN_LOSS,
     WhisperSegmentDataset,
+    assert_finite_trainable_gradients,
+    build_finite_training_callback,
     build_whisper_lora_config,
     materialize_training_examples,
     run_bounded_training,
@@ -125,6 +128,27 @@ class FakeTorch:
     backends = SimpleNamespace(mps=FakeMps())
 
 
+class FakeFiniteResult:
+    def __init__(self, value: bool) -> None:
+        self.value = value
+
+    def all(self) -> FakeFiniteResult:
+        return self
+
+    def item(self) -> bool:
+        return self.value
+
+
+class FakeNumericTorch:
+    @staticmethod
+    def isfinite(value: object) -> FakeFiniteResult:
+        return FakeFiniteResult(bool(getattr(value, "finite", False)))
+
+
+class FakeCallbackBase:
+    pass
+
+
 class FakeFeatureResult:
     def __init__(self, values: list[float]) -> None:
         self.input_features = [values]
@@ -149,6 +173,45 @@ class FakeProcessor:
 
 
 class LoraTrainingTest(unittest.TestCase):
+    def test_numeric_guard_checks_gradients_parameters_and_loss(self) -> None:
+        finite = SimpleNamespace(finite=True)
+        model = SimpleNamespace(
+            parameters=lambda: [
+                SimpleNamespace(requires_grad=True, grad=finite, finite=True),
+                SimpleNamespace(requires_grad=False, grad=None, finite=True),
+            ]
+        )
+        self.assertEqual(
+            1, assert_finite_trainable_gradients(model, FakeNumericTorch())
+        )
+        callback = build_finite_training_callback(
+            FakeCallbackBase, FakeNumericTorch()
+        )
+        callback.on_pre_optimizer_step(None, None, None, model=model)
+        callback.on_optimizer_step(None, None, None, model=model)
+        callback.on_log(None, None, None, logs={"loss": 5.0})
+        self.assertEqual([5.0], callback.logged_losses)
+        with self.assertRaisesRegex(FloatingPointError, "loss"):
+            callback.on_log(
+                None,
+                None,
+                None,
+                logs={"loss": MAX_PLAUSIBLE_TRAIN_LOSS + 1},
+            )
+
+    def test_numeric_guard_rejects_nonfinite_gradient(self) -> None:
+        model = SimpleNamespace(
+            parameters=lambda: [
+                SimpleNamespace(
+                    requires_grad=True,
+                    grad=SimpleNamespace(finite=False),
+                    finite=True,
+                )
+            ]
+        )
+        with self.assertRaisesRegex(FloatingPointError, "non-finite"):
+            assert_finite_trainable_gradients(model, FakeNumericTorch())
+
     def test_local_mps_runner_has_timeout_and_private_cleanup(self) -> None:
         source = LOCAL_MPS_RUNNER.read_text(encoding="utf-8")
         self.assertIn('status --porcelain', source)
@@ -156,6 +219,8 @@ class LoraTrainingTest(unittest.TestCase):
         self.assertIn('kill -TERM "${CHILD_PID}"', source)
         self.assertIn('cleanup_private_staging', source)
         self.assertIn('caffeinate -dimsu', source)
+        self.assertIn('numeric-smoke', source)
+        self.assertIn('EXPECTED_REPORT', source)
 
     def test_whisper_uses_generic_peft_forward_wrapper(self) -> None:
         experiment = json.loads(EXPERIMENT_CONFIG.read_text(encoding="utf-8"))
