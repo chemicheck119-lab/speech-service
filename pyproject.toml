@@ -15,6 +15,7 @@ dependencies = [
 [project.optional-dependencies]
 lora = [
   "accelerate==1.14.0",
+  "ctranslate2==4.8.2",
   "numpy==2.3.5",
   "peft==0.20.0",
   "scipy==1.16.3",
@@ -32,6 +33,7 @@ chemicheck119-speech-lora-preflight = "chemicheck119_speech.lora_protocol:main"
 chemicheck119-speech-lora-data-preflight = "chemicheck119_speech.lora_data_preflight:main"
 chemicheck119-speech-lora-tokenizer-preflight = "chemicheck119_speech.lora_tokenizer_preflight:main"
 chemicheck119-speech-lora-train = "chemicheck119_speech.lora_training:main"
+chemicheck119-speech-lora-convert = "chemicheck119_speech.lora_conversion:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

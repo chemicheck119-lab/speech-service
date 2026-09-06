@@ -29,7 +29,8 @@
 | 서울·인천 신고음성·모의 통신 왜곡 평가 | 구현·실행 완료(실제 현장 무전 아님) |
 | 실시간 스트리밍 API·패드 연동 | 설계·구현 전 |
 | Whisper tokenizer·data preflight | 구현·실행 완료 |
-| 제한 LoRA local MPS 학습 harness | 구현 완료·전체 학습 실행 전 |
+| 제한 LoRA local MPS 학습 harness | 구현 완료·1차 FP16 실행 수치 불안정으로 기각 |
+| LoRA A/B/C 변환 pipeline | 구현 완료·유효 adapter 부재로 실행 전 |
 | LoRA adapter·A/B/C 성능 평가 | 설계 완료·실행 전 |
 | 화학용어 사후 자동교정 | 미구현; 원문 보존 원칙상 현재 범위 제외 |
 | 현장 무전 성능 | 검증되지 않음 |
@@ -263,8 +264,33 @@ local runner는 현재 main commit과 clean worktree만 허용하고 `caffeinate
 timestamp 구간만 8kHz→16kHz로 재표본화해 학습합니다. 임시 음성과 Trainer 작업 디렉터리는
 정상 종료 또는 `TERM` 시 제거합니다. runner는 예측 가능한 private staging 경로만 추가로
 정리합니다. 결과 보고서에는 aggregate loss·속도·artifact hash만 남고 전사문·주소·recordId는
-포함하지 않습니다. 전체 실행 전 상태는 **구현 완료·학습 실행
-전**이며, adapter가 생겨도 잠금 dev와 downstream 안전평가 전에는 **부분 구현 또는 개발용
+포함하지 않습니다. 2026-09-07 첫 FP16 MPS 실행은 25 step에서 `loss=12157.4975`,
+`grad_norm=NaN`을 보여 30 step에서 중단·기각했습니다. adapter와 training report는 생성되지
+않았고 추가 서버 비용은 0원입니다. 이 실패는 LoRA 자체의 효과를 기각한 결과가 아니라 해당
+수치 설정의 전체 실행을 기각한 결과입니다. 별도 FP32 smoke가 유한 loss·gradient와 LoRA
+parameter update를 확인하기 전에는 재실행하지 않습니다.
+
+### LoRA A/B/C 변환 pipeline
+
+유효한 `trained_unvalidated` adapter가 생긴 뒤에만 B와 C를 같은 CTranslate2 4.8.2·FP16
+변환 설정으로 생성합니다. A는 현재 운영 기준선, B는 고정 OpenAI base의 재변환 control,
+C는 같은 base에 adapter를 안전 병합한 candidate입니다. 변환 효과와 LoRA 효과를 분리하기
+위해 C는 우선 B와 비교합니다.
+
+변환기는 training report와 config hash, 모든 adapter artifact hash, 추가 서버 비용 0원,
+학습 commit 및 변환기 commit을 확인·기록합니다. 변조되거나 symlink인 입력, 기존 output,
+8GiB 미만 여유 공간은 거부합니다. 변환 성공도 정확도 향상이나 채택을 뜻하지 않습니다.
+
+```bash
+chemicheck119-speech-lora-convert \
+  --training-dir /private/training-run-UNIQUE \
+  --execution-config config/whisper_lora_execution_v1.json \
+  --experiment-config config/whisper_lora_experiment_v1.json \
+  --output-dir /private/conversion-run-UNIQUE \
+  --converter-revision "$(git rev-parse HEAD)"
+```
+
+adapter가 생겨도 잠금 dev와 downstream 안전평가 전 사실 상태는 **부분 구현 또는 개발용
 데모**입니다.
 
 ## 기본 검증
