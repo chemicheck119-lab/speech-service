@@ -44,6 +44,7 @@ class FasterWhisperTranscriber:
     ) -> None:
         from faster_whisper import WhisperModel
 
+        self.model = model
         self.requested_device = device
         self.requested_compute_type = compute_type
         self.actual_device = device
