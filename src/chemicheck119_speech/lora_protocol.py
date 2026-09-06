@@ -237,7 +237,8 @@ def validate_lora_preflight(
         or provenance.get("contains_addresses") is not False
     ):
         raise ValueError("split manifest provenance or privacy contract does not match")
-    if sha256_file(priority_terms_path) != data["priority_terms_sha256"]:
+    priority_terms_sha256 = sha256_file(priority_terms_path)
+    if priority_terms_sha256 != data["priority_terms_sha256"]:
         raise ValueError("priority terms SHA-256 does not match")
 
     inventory = _object(split_manifest.get("inventory"), "split inventory")
@@ -257,8 +258,16 @@ def validate_lora_preflight(
     integrity = _object(split_manifest.get("integrity_report"), "split integrity")
     split_integrity = _object(integrity.get("split_integrity"), "split integrity")
     entities = _object(split_integrity.get("entities"), "split integrity entities")
+    speaker = _object(entities.get("speaker"), "split speaker integrity")
     source = _object(entities.get("source"), "split source integrity")
     event = _object(entities.get("event"), "split event integrity")
+    speaker_reason = speaker.get("reason")
+    if (
+        speaker.get("status") != "not_applicable"
+        or not isinstance(speaker_reason, str)
+        or not speaker_reason.strip()
+    ):
+        raise ValueError("missing speaker IDs must remain explicitly not applicable")
     if source.get("status") != "passed" or source.get("overlap_count") != 0:
         raise ValueError("train/dev source overlap gate did not pass")
     if event.get("status") != "not_evaluated":
@@ -289,7 +298,7 @@ def validate_lora_preflight(
     return {
         "schema_version": "1.0.0",
         "protocol_id": PROTOCOL_ID,
-        "status": "passed",
+        "status": "limited",
         "fact_status": "설계 완료·구현 전",
         "generated_at": generated_at
         or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -303,10 +312,16 @@ def validate_lora_preflight(
             "dev_utterances": dev["utterance_count"],
             "dev_smoke_record_support": smoke_support["record_support"],
             "dev_smoke_utterance_support": smoke_support["utterance_support"],
+            "speaker_overlap_status": "not_evaluated",
             "event_overlap_status": "not_evaluated",
         },
         "archive_sha256": observed_archives,
-        "priority_terms_sha256": sha256_file(priority_terms_path),
+        "priority_terms_sha256": priority_terms_sha256,
+        "limitations": [
+            "provider labels contain no stable speaker ID, so train/dev speaker overlap is not evaluated",
+            "provider labels contain no stable cross-record incident ID, so event overlap is not evaluated",
+            "development results cannot establish untouched-region or field-radio generalization",
+        ],
         "automatic_training_allowed": False,
         "next_gate": "reviewed training harness, immutable derived archives, and current cost quote",
         "claim_scope": "preflight only; no LoRA performance or field-radio claim",

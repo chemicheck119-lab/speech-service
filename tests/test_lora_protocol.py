@@ -54,6 +54,10 @@ def _fixture(tmp_path: Path) -> dict[str, Path]:
         "integrity_report": {
             "split_integrity": {
                 "entities": {
+                    "speaker": {
+                        "status": "not_applicable",
+                        "reason": "no stable speaker ID",
+                    },
                     "source": {"status": "passed", "overlap_count": 0},
                     "event": {
                         "status": "not_evaluated",
@@ -114,9 +118,10 @@ class LoraProtocolTest(unittest.TestCase):
                     **inputs,
                     generated_at="2026-09-06T00:00:00Z",
                 )
-        self.assertEqual("passed", report["status"])
+        self.assertEqual("limited", report["status"])
         self.assertIs(report["automatic_training_allowed"], False)
         self.assertEqual(74, report["dataset"]["dev_smoke_record_support"])
+        self.assertEqual("not_evaluated", report["dataset"]["speaker_overlap_status"])
         serialized = json.dumps(report, ensure_ascii=False)
         self.assertNotIn("transcript", serialized)
         self.assertNotIn("recordId", serialized)
@@ -129,6 +134,29 @@ class LoraProtocolTest(unittest.TestCase):
                 ValueError, "audio archive SHA-256"
             ):
                 validate_lora_preflight(**inputs)
+
+    def test_priority_terms_digest_is_read_once_and_reused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            inputs = _fixture(Path(directory))
+            original = lora_protocol.sha256_file
+            calls: list[Path] = []
+
+            def recording_digest(path: Path) -> str:
+                calls.append(path)
+                return original(path)
+
+            with _registered_fixture(inputs), patch.object(
+                lora_protocol, "sha256_file", side_effect=recording_digest
+            ):
+                report = validate_lora_preflight(**inputs)
+            self.assertEqual(
+                1,
+                calls.count(inputs["priority_terms_path"]),
+            )
+            self.assertEqual(
+                hashlib.sha256(inputs["priority_terms_path"].read_bytes()).hexdigest(),
+                report["priority_terms_sha256"],
+            )
 
     def test_config_rejects_training_auto_authorization(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

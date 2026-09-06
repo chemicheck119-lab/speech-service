@@ -70,5 +70,6 @@ chemicheck119-speech-lora-preflight \
   --output /secure/lora-preflight.json
 ```
 
-통과 결과도 `automatic_training_allowed=false`를 유지합니다. 다음 Gate는 reviewed training
+결과는 화자·사고 중복을 측정할 ID가 없어 `status=limited`이며,
+`automatic_training_allowed=false`를 유지합니다. 다음 Gate는 reviewed training
 harness, immutable clean/wind artifact, 실행 직전 비용 견적입니다.
