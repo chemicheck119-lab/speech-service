@@ -27,6 +27,7 @@
 | 기본 전사 vs hotword 힌트 A/B | 측정 완료·hotword 기본값 제외 |
 | `radio-sim-v1` paired 강건성 평가 실행기 | 부분 구현 또는 개발용 데모 |
 | 서울·인천 신고음성·모의 통신 왜곡 평가 | 구현·실행 완료(실제 현장 무전 아님) |
+| 60초 이하 PCM WAV bounded 전사 API | 부분 구현 또는 개발용 데모 |
 | 실시간 스트리밍 API·패드 연동 | 설계·구현 전 |
 | Whisper tokenizer·data preflight | 구현·실행 완료 |
 | 제한 LoRA local MPS 학습 harness | 구현 완료·1차 FP16 실행 수치 불안정으로 기각 |
@@ -36,6 +37,20 @@
 | LoRA A/B/C 잠금 평가 runner | 구현 완료·유효 adapter 부재로 실행 전 |
 | 화학용어 사후 자동교정 | 미구현; 원문 보존 원칙상 현재 범위 제외 |
 | 현장 무전 성능 | 검증되지 않음 |
+
+## Bounded 전사 API
+
+`POST /api/v1/transcriptions`는 60초·16MiB 이하의 PCM WAV 클립을 받아 전사문, 구간,
+타임스탬프와 faster-whisper의 모델 고유 품질 신호를 반환합니다. 과도한 크기·재생시간·잘못된
+포맷은 추론 전에 차단하고, 기본 동시 추론 수는 1개이며 짧은 대기 한도를 넘으면 `429`로
+기권합니다. 빈 전사는 `ABSTAINED_NO_TRANSCRIPT`로 반환합니다.
+
+이 API는 CAS 후보를 만들거나 물질을 확정하지 않으며 위험 판단과 CAMEO 규칙을 실행하지
+않습니다. `avg_log_probability`와 `no_speech_probability`도 전사 정답 확률이 아닙니다. 현재
+상태는 생성 WAV·fake transcriber 계약 테스트를 통과한 **부분 구현 또는 개발용 데모**이며,
+실시간 스트리밍·패드 연결·현장 무전 성능·상용 동시성은 아직 검증되지 않았습니다.
+
+로컬 실행과 계약은 [Speech API 문서](docs/SPEECH_API.md)를 참고합니다.
 
 ## 고정 비교실험
 

@@ -8,11 +8,17 @@ version = "0.1.0"
 description = "Speech recognition boundary for ChemiCheck119"
 requires-python = ">=3.11"
 dependencies = [
+  "fastapi==0.139.2",
   "faster-whisper==1.2.1",
   "google-cloud-storage==3.3.1",
+  "starlette==1.3.1",
+  "uvicorn==0.51.0",
 ]
 
 [project.optional-dependencies]
+dev = [
+  "httpx==0.28.1",
+]
 lora = [
   "accelerate==1.14.0",
   "ctranslate2==4.8.2",
@@ -23,6 +29,7 @@ lora = [
 ]
 
 [project.scripts]
+chemicheck119-speech-api = "chemicheck119_speech.api:run"
 chemicheck119-speech-eval = "chemicheck119_speech.cli:main"
 chemicheck119-speech-robustness-eval = "chemicheck119_speech.robustness:main"
 chemicheck119-speech-cross-region-report = "chemicheck119_speech.cross_region_report:main"

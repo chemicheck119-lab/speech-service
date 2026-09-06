@@ -1,0 +1,654 @@
+{
+  "components": {
+    "schemas": {
+      "AudioInputResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "audio_retained": {
+            "const": false,
+            "title": "Audio Retained",
+            "type": "boolean"
+          },
+          "channels": {
+            "enum": [
+              1,
+              2
+            ],
+            "title": "Channels",
+            "type": "integer"
+          },
+          "duration_seconds": {
+            "exclusiveMinimum": 0.0,
+            "title": "Duration Seconds",
+            "type": "number"
+          },
+          "media_type": {
+            "const": "audio/wav",
+            "title": "Media Type",
+            "type": "string"
+          },
+          "sample_rate_hz": {
+            "title": "Sample Rate Hz",
+            "type": "integer"
+          },
+          "sample_width_bits": {
+            "const": 16,
+            "title": "Sample Width Bits",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "media_type",
+          "channels",
+          "sample_width_bits",
+          "sample_rate_hz",
+          "duration_seconds",
+          "audio_retained"
+        ],
+        "title": "AudioInputResponse",
+        "type": "object"
+      },
+      "ErrorDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "retryable"
+        ],
+        "title": "ErrorDetail",
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "chemicheck119-speech-api-v1",
+            "default": "chemicheck119-speech-api-v1",
+            "title": "Schema Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "error"
+        ],
+        "title": "ErrorResponse",
+        "type": "object"
+      },
+      "LiveResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "chemicheck119-speech-api-v1",
+            "default": "chemicheck119-speech-api-v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "status": {
+            "const": "LIVE",
+            "default": "LIVE",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id"
+        ],
+        "title": "LiveResponse",
+        "type": "object"
+      },
+      "NotReadyResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "error_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Type"
+          },
+          "reason": {
+            "const": "MODEL_LOAD_FAILED",
+            "default": "MODEL_LOAD_FAILED",
+            "title": "Reason",
+            "type": "string"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "chemicheck119-speech-api-v1",
+            "default": "chemicheck119-speech-api-v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "status": {
+            "const": "NOT_READY",
+            "default": "NOT_READY",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "error_type"
+        ],
+        "title": "NotReadyResponse",
+        "type": "object"
+      },
+      "QualitySignals": {
+        "additionalProperties": false,
+        "properties": {
+          "avg_log_probability": {
+            "title": "Avg Log Probability",
+            "type": "number"
+          },
+          "calibrated_correctness_probability": {
+            "const": false,
+            "title": "Calibrated Correctness Probability",
+            "type": "boolean"
+          },
+          "compression_ratio": {
+            "minimum": 0.0,
+            "title": "Compression Ratio",
+            "type": "number"
+          },
+          "no_speech_probability": {
+            "title": "No Speech Probability",
+            "type": "number"
+          }
+        },
+        "required": [
+          "avg_log_probability",
+          "no_speech_probability",
+          "compression_ratio",
+          "calibrated_correctness_probability"
+        ],
+        "title": "QualitySignals",
+        "type": "object"
+      },
+      "ReadyResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "max_audio_bytes": {
+            "title": "Max Audio Bytes",
+            "type": "integer"
+          },
+          "max_audio_seconds": {
+            "exclusiveMinimum": 0.0,
+            "title": "Max Audio Seconds",
+            "type": "number"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "chemicheck119-speech-api-v1",
+            "default": "chemicheck119-speech-api-v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "status": {
+            "const": "READY",
+            "default": "READY",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "max_audio_bytes",
+          "max_audio_seconds"
+        ],
+        "title": "ReadyResponse",
+        "type": "object"
+      },
+      "RuntimeResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "actual_compute_type": {
+            "title": "Actual Compute Type",
+            "type": "string"
+          },
+          "actual_device": {
+            "title": "Actual Device",
+            "type": "string"
+          },
+          "hotwords_used": {
+            "const": false,
+            "title": "Hotwords Used",
+            "type": "boolean"
+          },
+          "implementation": {
+            "const": "faster-whisper",
+            "title": "Implementation",
+            "type": "string"
+          },
+          "initialization_fallback": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Initialization Fallback"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "package_version": {
+            "const": "1.2.1",
+            "title": "Package Version",
+            "type": "string"
+          },
+          "processing_seconds": {
+            "minimum": 0.0,
+            "title": "Processing Seconds",
+            "type": "number"
+          },
+          "real_time_factor": {
+            "minimum": 0.0,
+            "title": "Real Time Factor",
+            "type": "number"
+          },
+          "requested_compute_type": {
+            "title": "Requested Compute Type",
+            "type": "string"
+          },
+          "requested_device": {
+            "title": "Requested Device",
+            "type": "string"
+          },
+          "service_version": {
+            "title": "Service Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "implementation",
+          "package_version",
+          "service_version",
+          "model",
+          "requested_device",
+          "requested_compute_type",
+          "actual_device",
+          "actual_compute_type",
+          "initialization_fallback",
+          "hotwords_used",
+          "processing_seconds",
+          "real_time_factor"
+        ],
+        "title": "RuntimeResponse",
+        "type": "object"
+      },
+      "SafetyBoundaryResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "cas_confirmation_performed": {
+            "const": false,
+            "title": "Cas Confirmation Performed",
+            "type": "boolean"
+          },
+          "chemical_identification_performed": {
+            "const": false,
+            "title": "Chemical Identification Performed",
+            "type": "boolean"
+          },
+          "decision_support_only": {
+            "const": true,
+            "title": "Decision Support Only",
+            "type": "boolean"
+          },
+          "quality_signals_are_calibrated_probabilities": {
+            "const": false,
+            "title": "Quality Signals Are Calibrated Probabilities",
+            "type": "boolean"
+          },
+          "risk_assessment_performed": {
+            "const": false,
+            "title": "Risk Assessment Performed",
+            "type": "boolean"
+          },
+          "uncertainty_preserved": {
+            "const": true,
+            "title": "Uncertainty Preserved",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "uncertainty_preserved",
+          "quality_signals_are_calibrated_probabilities",
+          "chemical_identification_performed",
+          "cas_confirmation_performed",
+          "risk_assessment_performed",
+          "decision_support_only"
+        ],
+        "title": "SafetyBoundaryResponse",
+        "type": "object"
+      },
+      "TranscriptResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "audio_seconds": {
+            "exclusiveMinimum": 0.0,
+            "title": "Audio Seconds",
+            "type": "number"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/TranscriptSegmentResponse"
+            },
+            "title": "Segments",
+            "type": "array"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "voiced_seconds": {
+            "minimum": 0.0,
+            "title": "Voiced Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "text",
+          "segments",
+          "audio_seconds",
+          "voiced_seconds"
+        ],
+        "title": "TranscriptResponse",
+        "type": "object"
+      },
+      "TranscriptSegmentResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "end_seconds": {
+            "minimum": 0.0,
+            "title": "End Seconds",
+            "type": "number"
+          },
+          "quality_signals": {
+            "$ref": "#/components/schemas/QualitySignals"
+          },
+          "start_seconds": {
+            "minimum": 0.0,
+            "title": "Start Seconds",
+            "type": "number"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start_seconds",
+          "end_seconds",
+          "text",
+          "quality_signals"
+        ],
+        "title": "TranscriptSegmentResponse",
+        "type": "object"
+      },
+      "TranscriptionResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "abstained": {
+            "title": "Abstained",
+            "type": "boolean"
+          },
+          "input": {
+            "$ref": "#/components/schemas/AudioInputResponse"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/RuntimeResponse"
+          },
+          "safety_boundary": {
+            "$ref": "#/components/schemas/SafetyBoundaryResponse"
+          },
+          "schema_version": {
+            "const": "chemicheck119-speech-api-v1",
+            "default": "chemicheck119-speech-api-v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "TRANSCRIBED",
+              "ABSTAINED_NO_TRANSCRIPT"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "transcript": {
+            "$ref": "#/components/schemas/TranscriptResponse"
+          }
+        },
+        "required": [
+          "request_id",
+          "status",
+          "abstained",
+          "transcript",
+          "input",
+          "runtime",
+          "safety_boundary"
+        ],
+        "title": "TranscriptionResponse",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "APIKeyHeader": {
+        "in": "header",
+        "name": "X-API-Key",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "제한된 WAV 음성을 전사하고 모델 고유 품질 신호를 보존합니다. CAS 확정·화학 위험 판단·CAMEO 실행은 수행하지 않습니다.",
+    "title": "케미체크119 Speech API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/transcriptions": {
+      "post": {
+        "operationId": "transcribe_audio_api_v1_transcriptions_post",
+        "requestBody": {
+          "content": {
+            "audio/wav": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscriptionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Transcribe Audio"
+      }
+    },
+    "/health/live": {
+      "get": {
+        "operationId": "live_health_live_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Live"
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "operationId": "ready_health_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotReadyResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Ready"
+      }
+    }
+  }
+}
