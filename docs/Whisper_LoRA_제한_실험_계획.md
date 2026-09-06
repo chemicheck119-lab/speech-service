@@ -53,7 +53,7 @@ preview 전용**입니다. 기본 운영 모델 교체와 현장 안전성 주�
 
 ## 비용 Gate
 
-- 서울 리전 standard T4 1장, `n1-standard-4`, 최대 3시간
+- 서울 두 zone의 재고 부족 확인 후 도쿄 리전 standard T4 1장, `n1-standard-4`, 최대 3시간
 - instance 1, retry 0, 실험 hard cap 20,000원
 - 전체 추가 개발 서버 비용 70,000원 이내
 - 실행 직전 현재 SKU·누적 비용·quota·artifact 잔존 여부를 다시 확인
@@ -134,6 +134,6 @@ Python cleanup을 실행하고, 60초 뒤 강제 kill에도 auto-delete boot dis
 
 학습 성공 직후 상태도 `trained_unvalidated`, 사실 상태는 **부분 구현 또는 개발용 데모**입니다.
 A/B/C 변환·잠금 dev·downstream 안전 Gate를 모두 통과하기 전에는 정확도 향상이나 채택을
-주장하지 않습니다. 현재 등록 ceiling으로 독립 계산한 3시간 비용 상한은 8,500원이며,
-이전 개발비 ceiling 50,000원을 더한 전체 상한은 58,500원입니다. 실행 직전 실제 견적은
+주장하지 않습니다. 리전 간 data transfer $0.25 ceiling을 포함한 3시간 비용 상한은
+9,032원이며, 이전 개발비 ceiling 50,000원을 더한 전체 상한은 59,032원입니다. 실행 직전 실제 견적은
 이와 별도로 생성·해시 고정합니다.
