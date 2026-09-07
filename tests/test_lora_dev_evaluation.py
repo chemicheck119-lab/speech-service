@@ -70,7 +70,7 @@ class LoraDevelopmentEvaluationTest(unittest.TestCase):
             labels_path.write_bytes(b"labels")
             snapshots = [
                 {"file": path.name, "sha256": _sha256(path)}
-                for path in (manifest_path, audio_path, labels_path)
+                for path in (audio_path, labels_path)
             ]
             arm = "C_lora_merged_candidate"
             model_path = conversion / "C"
@@ -89,6 +89,13 @@ class LoraDevelopmentEvaluationTest(unittest.TestCase):
             }
             preflight = {
                 "artifact_snapshots": snapshots,
+                "manifest_snapshots": [
+                    {
+                        "partition": "dev",
+                        "condition": EXPECTED_CONDITION,
+                        "sha256": _sha256(manifest_path),
+                    }
+                ],
                 "execution_config_sha256": "1" * 64,
                 "experiment_config_sha256": "2" * 64,
                 "run_summary_sha256": "3" * 64,
