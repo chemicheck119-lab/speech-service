@@ -19,8 +19,10 @@ from .runtime import FasterWhisperTranscriber, Transcriber
 DEV_EVALUATION_PROTOCOL_ID = "whisper-small-lora-wind-dev-arm-v1"
 EXPECTED_RECORDS = 132
 EXPECTED_CONDITION = "wind_snr0"
-EXPECTED_DATASET_ID = "aihub_71768_gwangju_fire"
-EXPECTED_DATASET_VERSION = "dataset-71768_downloaded-2026-09-05"
+EXPECTED_DATASET_ID = "aihub_71768_gwangju_fire_lora_dev_wind_snr0"
+EXPECTED_DATASET_VERSION = (
+    "dataset-71768_downloaded-2026-09-05+whisper-lora-clean-wind-snr0-v1"
+)
 EXPECTED_EVIDENCE_SCOPE = (
     "AIHub emergency-call Training derivative with procedural wind; "
     "not field-radio validation"
