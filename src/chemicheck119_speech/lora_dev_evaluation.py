@@ -55,6 +55,25 @@ def _artifact_snapshot_map(report: dict[str, object]) -> dict[str, dict[str, obj
     return result
 
 
+def _registered_manifest_sha256(
+    report: dict[str, object], *, partition: str, condition: str
+) -> str:
+    values = report.get("manifest_snapshots")
+    if not isinstance(values, list):
+        raise ValueError("LoRA data preflight has no manifest snapshots")
+    matches: list[dict[str, object]] = []
+    for value in values:
+        item = _object(value, "manifest snapshot")
+        if item.get("partition") == partition and item.get("condition") == condition:
+            matches.append(item)
+    if len(matches) != 1:
+        raise ValueError("registered development manifest is missing or duplicated")
+    digest = matches[0].get("sha256")
+    if not isinstance(digest, str) or len(digest) != 64:
+        raise ValueError("registered development manifest SHA-256 is invalid")
+    return digest
+
+
 def _read_manifest(path: Path) -> tuple[dict[str, object], bytes]:
     if path.is_symlink() or not path.is_file():
         raise ValueError("development manifest must be a regular non-symlink file")
@@ -106,9 +125,12 @@ def validate_dev_inputs(
     manifest_name = f"dev-{EXPECTED_CONDITION}.manifest.json"
     audio_name = f"dev-{EXPECTED_CONDITION}.zip"
     label_name = "dev-labels.zip"
-    for name in (manifest_name, audio_name, label_name):
+    for name in (audio_name, label_name):
         if name not in snapshots:
             raise ValueError(f"registered development artifact is missing: {name}")
+    registered_manifest_sha256 = _registered_manifest_sha256(
+        data_report, partition="dev", condition=EXPECTED_CONDITION
+    )
     manifest_path = artifact_root / manifest_name
     audio_path = artifact_root / audio_name
     label_path = artifact_root / label_name
@@ -135,7 +157,10 @@ def validate_dev_inputs(
         audio_name: _sha256(audio_path),
         label_name: _sha256(label_path),
     }
-    for name, digest in observed.items():
+    if registered_manifest_sha256 != manifest_digest:
+        raise ValueError("development manifest drifted after data preflight")
+    for name in (audio_name, label_name):
+        digest = observed[name]
         if snapshots[name].get("sha256") != digest:
             raise ValueError("development artifact drifted after data preflight")
 
