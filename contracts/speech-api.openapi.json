@@ -270,6 +270,43 @@
             "title": "Model",
             "type": "string"
           },
+          "model_artifact_verified": {
+            "title": "Model Artifact Verified",
+            "type": "boolean"
+          },
+          "model_bin_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Bin Sha256"
+          },
+          "model_repository": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Repository"
+          },
+          "model_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Revision"
+          },
           "package_version": {
             "const": "1.2.1",
             "title": "Package Version",
@@ -293,6 +330,17 @@
             "title": "Requested Device",
             "type": "string"
           },
+          "service_git_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Git Commit"
+          },
           "service_version": {
             "title": "Service Version",
             "type": "string"
@@ -302,7 +350,12 @@
           "implementation",
           "package_version",
           "service_version",
+          "service_git_commit",
           "model",
+          "model_repository",
+          "model_revision",
+          "model_bin_sha256",
+          "model_artifact_verified",
           "requested_device",
           "requested_compute_type",
           "actual_device",

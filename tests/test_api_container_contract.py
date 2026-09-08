@@ -16,6 +16,16 @@ class SpeechApiContainerContractTest(unittest.TestCase):
         self.assertIn("CHEMICHECK119_SPEECH_LOCAL_FILES_ONLY=true", dockerfile)
         self.assertIn("CHEMICHECK119_SPEECH_DEVICE=cpu", dockerfile)
         self.assertIn("CHEMICHECK119_SPEECH_COMPUTE_TYPE=int8", dockerfile)
+        self.assertIn(
+            "WHISPER_MODEL_REVISION=536b0662742c02347bc0e980a01041f333bce120",
+            dockerfile,
+        )
+        self.assertIn(
+            "WHISPER_MODEL_BIN_SHA256=3e305921506d8872816023e4c273e75d2419fb89b24da97b4fe7bce14170d671",
+            dockerfile,
+        )
+        self.assertIn("chemicheck119_speech.model_provenance", dockerfile)
+        self.assertIn("CHEMICHECK119_SPEECH_MODEL_PROVENANCE_MANIFEST", dockerfile)
         self.assertNotIn("CHEMICHECK119_SPEECH_API_KEY=", dockerfile)
         self.assertNotIn("ALLOW_ANONYMOUS=true", dockerfile)
 

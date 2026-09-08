@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from chemicheck119_speech.model_provenance import verify_model_provenance
+
 
 @dataclass(frozen=True)
 class TranscriptSegment:
@@ -41,6 +43,7 @@ class FasterWhisperTranscriber:
         cpu_threads: int = 4,
         download_root: str | None = None,
         local_files_only: bool = False,
+        provenance_manifest: str | None = None,
     ) -> None:
         from faster_whisper import WhisperModel
 
@@ -50,6 +53,16 @@ class FasterWhisperTranscriber:
         self.actual_device = device
         self.actual_compute_type = compute_type
         self.initialization_fallback: str | None = None
+        self.model_repository: str | None = None
+        self.model_revision: str | None = None
+        self.model_bin_sha256: str | None = None
+        self.model_artifact_verified = False
+        if provenance_manifest is not None:
+            provenance = verify_model_provenance(Path(model), Path(provenance_manifest))
+            self.model_repository = str(provenance["repository"])
+            self.model_revision = str(provenance["revision"])
+            self.model_bin_sha256 = str(provenance["model_bin_sha256"])
+            self.model_artifact_verified = bool(provenance["model_artifact_verified"])
         options = {
             "cpu_threads": cpu_threads,
             "download_root": download_root,

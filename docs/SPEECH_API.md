@@ -58,6 +58,12 @@ Whisper의 구간 타임스탬프는 20ms 단위의 모델 출력이라 마지�
 - `ABSTAINED_NO_TRANSCRIPT`: 음성 또는 인식 가능한 발화가 없어 빈 전사로 기권했습니다.
 - `quality_signals`: faster-whisper가 제공한 보정되지 않은 디코딩 신호입니다. 정답 확률로
   표시하거나 CAS 자동확정 threshold로 사용하지 않습니다.
+- `runtime.model_revision`과 `runtime.model_bin_sha256`: 배포 컨테이너가 시작할 때 실제
+  `model.bin`을 manifest와 대조해 일치한 경우에만 채워집니다.
+- `runtime.model_artifact_verified`: 모델 파일 동일성을 뜻할 뿐 전사 정확도나 현장 안전성
+  검증을 뜻하지 않습니다. 로컬 개발처럼 provenance manifest를 사용하지 않으면 `false`입니다.
+- `runtime.service_git_commit`: 40자리 commit이 image build에 주입된 경우에만 노출됩니다.
+  컨테이너 image digest와 함께 비교해야 배포 코드의 출처를 확인할 수 있습니다.
 - `safety_boundary`: Speech Service가 물질 식별·CAS 확인·위험 판단을 수행하지 않았음을
   명시합니다.
 

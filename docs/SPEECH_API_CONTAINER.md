@@ -11,14 +11,16 @@ Manager, cold start, 동시 부하와 현장 음성은 아직 검증하지 않�
 
 ## production image
 
-production build는 `small` model을 build 단계에서 image에 포함합니다. runtime은
-`local_files_only=true`라서 시작 중 외부 model registry에 접속하지 않습니다.
+production build는 `Systran/faster-whisper-small`의 revision
+`536b0662742c02347bc0e980a01041f333bce120`을 build 단계에서 image에 포함합니다.
+`model.bin` SHA-256이 고정값과 다르면 build를 중단합니다. runtime은 manifest와 실제
+파일을 다시 대조하며 `local_files_only=true`라서 시작 중 외부 model registry에 접속하지
+않습니다.
 
 ```bash
 docker build \
   --file Dockerfile.api \
   --build-arg EMBED_WHISPER_MODEL=true \
-  --build-arg WHISPER_MODEL=small \
   --build-arg VCS_REF="$(git rev-parse HEAD)" \
   --tag asia-northeast3-docker.pkg.dev/PROJECT/REPOSITORY/speech-api:COMMIT \
   .

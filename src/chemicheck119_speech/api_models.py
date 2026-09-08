@@ -60,7 +60,12 @@ class RuntimeResponse(StrictModel):
     implementation: Literal["faster-whisper"]
     package_version: Literal["1.2.1"]
     service_version: str
+    service_git_commit: str | None
     model: str
+    model_repository: str | None
+    model_revision: str | None
+    model_bin_sha256: str | None
+    model_artifact_verified: bool
     requested_device: str
     requested_compute_type: str
     actual_device: str
