@@ -6,9 +6,8 @@
 
 - 목표: 광주 Training 내부 dev에서 clean 성능과 오삽입을 지키면서 `wind_snr0`의 `연기`
   누락을 줄일 수 있는지 검증
-- 현재 상태: data·tokenizer preflight와 local MPS harness는 **구현 완료**, FP16 master
-  weight 전체 실행과 FP32 master+FP16 autocast smoke는 수치 불안정으로 **기각**, full
-  FP32 smoke는 실행·통과
+- 현재 상태: Apple M4 MPS full FP32 1 epoch 학습과 A/B/C clean·wind 개발 평가까지
+  **실행 완료**, 사전등록 `wind_snr0` Gate 미통과로 후보 **기각·기준선 유지**
 - 실행 허용: 증분 서버비 0원 확인과 고정 MPS runtime 검증 뒤 명시적 1회 실행만 허용
 - 데이터 범위: AIHub 신고전화와 절차적 모의 왜곡, 실제 현장 무전 아님
 
@@ -171,7 +170,24 @@ commit·확인서·single-use authorization으로 전체 학습을 한 번 실�
 - 결정: **full FP32 수치 안정성 Gate 채택**
 
 이 결과는 2-step의 수치 안정성만 보여 줍니다. LoRA 정확도·안전성·현장 무전 성능을
-증명하지 않으며, 전체 학습 결과와 A/B/C 잠금 평가가 남아 있습니다.
+증명하지 않습니다. 이후 전체 학습과 A/B/C 평가를 실행했으며 최종 결과는 아래와 같습니다.
+
+## full FP32 전체 학습 실제 결과
+
+- runtime: 소유한 Apple M4·MPS, full FP32, 추가 서버 비용 0원
+- 학습: 1 epoch·1,136 optimizer step·18,171 utterances
+- 실행시간: 21,611.879초
+- train loss: 1.66174805
+- finite guard: loss 1,136회, gradient·parameter tensor 각 163,584회 통과
+- training report SHA-256:
+  `666c7df754f02951ada7497fa4353ee9e8bca56c2adcc2a3500241107f61ace5`
+- adapter SHA-256:
+  `f553a463617cfa96941f422f748b9ced37f05cce4aa090dd86074b88af5466b6`
+- conversion report SHA-256:
+  `790475e476644e6c6375a39abb732e6286f98c26cd5155c49b229ae1758b739c`
+
+학습 loss는 성능 지표가 아닙니다. 이 시점의 adapter는 `trained_unvalidated`, 변환 후보는
+`converted_unvalidated`였으며 아래 clean·wind 평가가 모델 채택을 결정했습니다.
 
 ## A/B/C 변환 Gate
 
@@ -201,6 +217,23 @@ A↔B CER·WER 절대 차이가 각각 0.5%p를 넘으면 비교 자체를 무�
 유지합니다. B↔C clean CER 회귀 1%p, WER 회귀 1.5%p, false insertion 증가 0 조건을
 통과해도 `wind_snr0`와 downstream 안전 Gate로 진행할 수 있을 뿐 자동 채택은 금지됩니다.
 
+### clean 77건 실제 결과
+
+| 지표 | B same-conversion 기준선 | C LoRA 후보 | C−B |
+|---|---:|---:|---:|
+| CER | 40.78% | 37.75% | -3.04%p |
+| WER | 62.94% | 59.94% | -3.00%p |
+| 우선용어 F1 | 88.89% | 92.90% | +4.01%p |
+| false insertion | 3 | 1 | -2 |
+| RTF | 0.1172 | 0.1319 | +0.0147 |
+
+A와 B의 CER·WER 차이는 0으로 converter drift Gate를 통과했습니다. C의 개선 후보 신호가
+있었지만 CER·WER paired bootstrap 95% CI가 0을 포함해 개선 확정 주장은 하지 않습니다.
+판정은 `continue_wind_and_downstream_gates`였습니다.
+
+- clean report SHA-256:
+  `c199161c6b3a64c91aa5f3eaf0261eadda6a431a5120ef4f1b9980963b580bae`
+
 ## `wind_snr0` 개발 평가 Gate
 
 clean Gate의 결정이 `continue_wind_and_downstream_gates`인 경우에만 B·C를 광주 Training
@@ -224,6 +257,24 @@ scripts/run_whisper_lora_wind_dev_once.sh \
   /private/wind-development-evaluation-UNIQUE
 ```
 
-개발 Gate 통과도 자동 채택이나 field-radio·field-safety 성능을 증명하지 않습니다. 서울·인천
-Validation은 학습·튜닝에 사용하지 않지만 현재 artifact가 없어 이 LoRA 실행의 untouched-region
-평가는 별도 미완료 Gate로 남깁니다.
+### `wind_snr0` 132건 실제 결과
+
+| 지표 | B same-conversion 기준선 | C LoRA 후보 | C−B |
+|---|---:|---:|---:|
+| CER | 55.75% | 54.11% | -1.64%p |
+| WER | 72.88% | 79.55% | +6.67%p |
+| 우선용어 F1 | 82.63% | 84.79% | +2.16%p |
+| false insertion | 5 | 5 | 0 |
+| RTF | 0.1283 | 0.2705 | +0.1422 |
+
+CER·WER bootstrap CI가 개선을 확정하지 못했고, WER는 악화됐으며 우선용어 F1 개선도
+사전등록 3%p에 미달했습니다. 따라서
+`decision=reject_candidate_keep_operational_baseline`으로 후보를 기각했습니다. 후보가
+wind Gate에서 탈락했으므로 downstream과 untouched-region 평가를 실행하지 않았습니다.
+
+- wind development report SHA-256:
+  `9db2425dfab2355276912867d9a91d992d3b542255d09983aec46b69ec015f82`
+
+서울·인천 Validation은 이 학습·튜닝에 사용하지 않았지만, 탈락 후보의 추가 평가를 성능
+근거로 만들지 않았습니다. 본 결과는 AIHub 신고전화 파생 development 평가이며 실제 현장
+무전·현장 안전·production 성능을 증명하지 않습니다.
