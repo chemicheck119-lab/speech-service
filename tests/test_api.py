@@ -250,6 +250,73 @@ class SpeechApiTest(unittest.TestCase):
         self.assertEqual("MODEL_OUTPUT_INVALID", response.json()["error"]["code"])
         self.assertFalse(transcriber.path_seen.exists())
 
+    def test_small_final_timestamp_overrun_is_bounded_to_audio_end(self) -> None:
+        class SlightOverrunTranscriber(FakeTranscriber):
+            def transcribe(self, audio_path: Path, hotwords: str | None) -> Transcript:
+                result = super().transcribe(audio_path, hotwords)
+                segment = result.segments[0]
+                return Transcript(
+                    text=result.text,
+                    segments=(
+                        TranscriptSegment(
+                            start_seconds=segment.start_seconds,
+                            end_seconds=0.36,
+                            text=segment.text,
+                            avg_log_probability=segment.avg_log_probability,
+                            no_speech_probability=segment.no_speech_probability,
+                            compression_ratio=segment.compression_ratio,
+                        ),
+                    ),
+                    audio_seconds=result.audio_seconds,
+                    voiced_seconds=result.voiced_seconds,
+                )
+
+        app = create_app(
+            transcriber=SlightOverrunTranscriber(), allow_anonymous=True
+        )
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/transcriptions",
+                content=wav_bytes(),
+                headers={"Content-Type": "audio/wav"},
+            )
+
+        self.assertEqual(200, response.status_code)
+        segment = response.json()["transcript"]["segments"][0]
+        self.assertEqual(0.1, segment["end_seconds"])
+
+    def test_large_final_timestamp_overrun_fails_closed(self) -> None:
+        class LargeOverrunTranscriber(FakeTranscriber):
+            def transcribe(self, audio_path: Path, hotwords: str | None) -> Transcript:
+                result = super().transcribe(audio_path, hotwords)
+                segment = result.segments[0]
+                return Transcript(
+                    text=result.text,
+                    segments=(
+                        TranscriptSegment(
+                            start_seconds=segment.start_seconds,
+                            end_seconds=0.61,
+                            text=segment.text,
+                            avg_log_probability=segment.avg_log_probability,
+                            no_speech_probability=segment.no_speech_probability,
+                            compression_ratio=segment.compression_ratio,
+                        ),
+                    ),
+                    audio_seconds=result.audio_seconds,
+                    voiced_seconds=result.voiced_seconds,
+                )
+
+        app = create_app(transcriber=LargeOverrunTranscriber(), allow_anonymous=True)
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/transcriptions",
+                content=wav_bytes(),
+                headers={"Content-Type": "audio/wav"},
+            )
+
+        self.assertEqual(502, response.status_code)
+        self.assertEqual("MODEL_OUTPUT_INVALID", response.json()["error"]["code"])
+
     def test_concurrent_request_fails_fast_when_transcriber_is_busy(self) -> None:
         started = threading.Event()
         release = threading.Event()
