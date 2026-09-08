@@ -5,12 +5,14 @@
 - cgroup·process memory counter 수집: **구현 완료**
 - numeric-only structured log와 fail-open 계측 경계: **구현 완료**
 - 단위·회귀·OpenAPI 계약 검사: **구현 완료**
-- immutable image build·Cloud Run candidate 배포: **설계 완료·구현 전**
-- 실제 process/container peak와 8GiB 축소 가능성: **검증되지 않은 가설**
+- immutable image build·Cloud Run candidate 배포: **부분 구현 또는 개발용 데모 — 검증 완료**
+- 성공 요청별 process high-water mark·cgroup current 관측: **부분 구현 또는 개발용 데모 — 검증 완료**
+- 실제 cgroup peak와 8GiB 축소 가능성: **검증되지 않은 가설**
 - GPU latency·비용 우위: **검증되지 않은 가설**
 
-코드가 merge돼도 실제 Cloud Run 값을 측정하기 전에는 “메모리가 충분하다”, “4GiB로 줄일 수
-있다” 또는 “GPU가 필요 없다”고 말하지 않습니다.
+제한된 실제 Cloud Run 값을 측정했지만 “메모리가 충분하다”, “4GiB로 줄일 수 있다” 또는
+“GPU가 필요 없다”고 말하지 않습니다. 동일 합성 입력 성공 3건의 process high-water mark는
+안전한 최소 memory가 아니며 cgroup peak도 관측되지 않았습니다.
 
 ## 왜 추가했는가
 
@@ -79,6 +81,36 @@ logger에 단일 `StreamHandler`를 idempotent하게 구성하고 Uvicorn access
    대조합니다.
 5. image digest·revision·입력 SHA-256·계측 source SHA-256·집계 보고서 SHA-256을 기록합니다.
 6. OOM·5xx·민감정보 log가 있거나 cgroup limit가 배포 설정과 다르면 후보를 기각합니다.
+
+## 2026-09-08 실제 개발용 preview 결과
+
+| 항목 | 관찰값 | 해석 한계 |
+|---|---:|---|
+| revision | `chemicheck119-speech-api-preview-tsfix` | 상용 revision 아님 |
+| image digest | `sha256:6788bbd3b6ee061457c2015bcb5a3f46ddee42dc08446777b5283a341bd00bd5` | immutable image 식별자 |
+| 입력 | 30초 공개 합성 파생물 | 실제 신고전화·현장 무전 아님 |
+| protocol | 동시 2요청 × 3 batch | 장시간·대규모 부하 아님 |
+| 응답 | HTTP 200 3건 + 앱 429 3건 | 플랫폼 429·5xx 0건 |
+| 성공 RTF | median 0.2578, max 0.2917 | 정확도 지표 아님 |
+| cgroup current | median 1.2947GiB, max 1.2949GiB | 관측 시점 값, peak 아님 |
+| process current RSS | median 1.4354GiB, max 1.4356GiB | cgroup과 직접 차감 금지 |
+| process max RSS | median 1.5360GiB, max 1.5363GiB | process 생명주기 high-water mark |
+| cgroup limit | 8GiB | 배포 설정과 일치 |
+| cgroup peak | 관측 불가 | Cloud Run의 v1 경로에 counter가 없었음 |
+
+성공 request ID 3건과 resource event 3건이 모두 일치했고 numeric allowlist·counter 범위·8GiB
+limit·원음 및 전사문 미수집을 포함한 안전 Gate 13개가 모두 통과했습니다. 비공개 집계
+보고서 SHA-256은
+`fd3cff29c56c3bbb5bd6322f4b8cf37ec94c0f2f6463718c56463f4424221f9f`입니다.
+
+첫 30초 실행은 모델 마지막 segment end가 30.26초로 입력 30.00초를 0.26초 초과해 API의
+기존 0.10초 경계에서 502로 중단됐습니다. PR #52에서 최대 0.5초의 마지막 end 초과만 입력
+길이로 제한하고 더 큰 초과는 계속 fail-closed 처리했습니다. 전사문은 바꾸지 않았고 전체
+unittest 109개 통과 뒤 같은 입력으로 재검증했습니다.
+
+결정은 **계측 방법과 이번 수치 채택**, **8GiB 축소 보류**입니다. cgroup peak를 얻지 못했고
+입력 다양성도 없으므로 다음 축소 후보는 별도 revision·동일 protocol·rollback 경계에서만
+비교합니다. 자세한 실행 근거는 infra PR #34와 infra #27에 있습니다.
 
 8GiB 축소 실험은 실제 peak가 확인된 뒤 별도 revision에서 수행합니다. 축소 후보는 같은 image,
 같은 입력, 같은 request protocol을 사용하고 cold start·warm RTF·E2E tail·429·OOM을 함께
