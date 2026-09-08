@@ -85,7 +85,7 @@
 | 서울·인천 execution·summary runtime provenance 결합 | 구현 완료 |
 | 서울·인천 승인 데이터 실행 | 부분 구현 또는 개발용 데모 — 각 40건×18조건 완료 |
 | STT→Parser→Resolver 안전 평가 | 부분 구현 또는 개발용 데모 — 안전 위반 0, CAS 정답 없음 |
-| 제한 Whisper LoRA | 부분 구현 또는 개발용 데모 — #18에서 진행 중 |
+| 제한 Whisper LoRA | 부분 구현 또는 개발용 데모 — 전체 학습·clean/wind 평가 완료, 후보 기각 |
 | 실제 현장 무전 성능 | 검증되지 않은 가설 |
 
 주요 artifact SHA-256은 인천 summary

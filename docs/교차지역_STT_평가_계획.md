@@ -126,7 +126,7 @@ CER·WER는 지역별 신고 길이와 표현 구성이 달라 단독 합격선�
 | 서울·인천 모의 통신 왜곡 파생 데이터 | 구현 완료 | `radio-sim-v1` run summary |
 | 서울·인천 모의 통신 왜곡 STT·후단 평가 | 부분 구현 또는 개발용 데모 | 각 40건×18조건, 안전 위반 0 |
 | 교차지역 보고서 provenance Gate | 구현 완료 | report SHA-256 고정 |
-| 제한 Whisper LoRA | 부분 구현 또는 개발용 데모 | #18에서 광주 Training 전체 학습 진행 중 |
+| 제한 Whisper LoRA | 부분 구현 또는 개발용 데모 | M4 MPS 전체 학습·clean/wind 평가 완료, wind Gate에서 후보 기각 |
 | 실제 현장 무전 성능 | 검증되지 않은 가설 | 현장 음성 없음 |
 
 주요 artifact SHA-256은 인천 clean summary

@@ -31,11 +31,11 @@
 | Speech API 전용 non-root container | 부분 구현 또는 개발용 데모; Cloud Run 배포 전 |
 | 실시간 스트리밍 API·패드 연동 | 설계·구현 전 |
 | Whisper tokenizer·data preflight | 구현·실행 완료 |
-| 제한 LoRA local MPS 학습 harness | 구현 완료·1차 FP16 실행 수치 불안정으로 기각 |
+| 제한 LoRA local MPS 학습 | Apple M4 MPS full FP32 1 epoch 실행 완료 |
 | LoRA numeric smoke Gate | full FP32 2-step 실행·통과 |
-| LoRA A/B/C 변환 pipeline | 구현 완료·유효 adapter 부재로 실행 전 |
-| LoRA A/B/C 잠금 평가 판정기 | 구현 완료·유효 adapter 부재로 실행 전 |
-| LoRA A/B/C 잠금 평가 runner | 구현 완료·유효 adapter 부재로 실행 전 |
+| LoRA A/B/C 변환 pipeline | 구현·실행 완료 |
+| LoRA A/B/C clean 잠금 평가 | 77건 실행·후속 wind Gate 진입 |
+| LoRA `wind_snr0` 개발 평가 | 132건 실행·후보 기각·기준선 유지 |
 | 화학용어 사후 자동교정 | 미구현; 원문 보존 원칙상 현재 범위 제외 |
 | 현장 무전 성능 | 검증되지 않음 |
 
@@ -298,11 +298,12 @@ loss가 비유한 값이거나 100을 넘으면 즉시 실패합니다. LoRA ten
 tensor가 그대로인 것도 확인합니다. 성공 보고서도 전체 학습을 자동 허용하거나 성능 향상을
 증명하지 않습니다.
 
-2026-09-07 full FP32 실제 실행에서는 두 loss가 10.8512·11.3878, gradient norm이
+2026-09-07 full FP32 smoke 실제 실행에서는 두 loss가 10.8512·11.3878, gradient norm이
 9.3629·8.8864로 모두 유한했습니다. LoRA tensor 144개가 모두 변경됐고 표본 frozen base
 tensor는 유지됐습니다. 따라서 **full FP32 수치 안정성 Gate만 채택**했습니다. report
-SHA-256은 `1538dacd6eba183c41f6db736647dde1ce66a01b039603c0679799cd6928617d`이며,
-다음 단계는 새 single-use authorization을 사용하는 전체 1회 학습입니다.
+SHA-256은 `1538dacd6eba183c41f6db736647dde1ce66a01b039603c0679799cd6928617d`입니다.
+이후 새 single-use authorization으로 full FP32 전체 1회 학습과 A/B/C 평가까지
+완료했으며, 최종 후보는 아래 `wind_snr0` Gate에서 기각했습니다.
 
 ```bash
 scripts/run_whisper_lora_mps_once.sh \
@@ -336,6 +337,20 @@ chemicheck119-speech-lora-convert \
 adapter가 생겨도 잠금 dev와 downstream 안전평가 전 사실 상태는 **부분 구현 또는 개발용
 데모**입니다.
 
+2026-09-07 실제 실행에서는 Apple M4 MPS로 full FP32 1 epoch·1,136 optimizer step을
+완료했습니다. 광주 Training train 527 records·18,171 utterances를 사용했고, 실행시간은
+21,611.879초, train loss는 1.66174805였습니다. 이 값은 학습 완료와 수치 유한성만 뜻하며
+정확도 개선은 아닙니다.
+
+- training report SHA-256:
+  `666c7df754f02951ada7497fa4353ee9e8bca56c2adcc2a3500241107f61ace5`
+- adapter SHA-256:
+  `f553a463617cfa96941f422f748b9ced37f05cce4aa090dd86074b88af5466b6`
+- B/C conversion report SHA-256:
+  `790475e476644e6c6375a39abb732e6286f98c26cd5155c49b229ae1758b739c`
+- 추가 서버 비용: 0원
+- 사실 상태: **부분 구현 또는 개발용 데모**
+
 ### LoRA A/B/C 잠금 평가
 
 A·B·C를 각각 같은 광주 화재 Validation 77건, `baseline` 단일 조건, CPU int8로 실행한 뒤
@@ -359,6 +374,14 @@ A↔B에서는 converter drift, B↔C에서는 LoRA effect를 분리하고 paire
 계산합니다. clean 회귀·false insertion Gate를 통과해도 결과는 wind·downstream Gate로
 진행할 자격일 뿐이며 자동 채택을 허용하지 않습니다. 원본 전사문이 있는 세 records 파일은
 권한 `0600`인 비공개 경로만 허용합니다.
+
+광주 Validation 77건 실제 결과에서 A와 B의 CER·WER drift는 0이었습니다. C는 B 대비
+CER 40.78%→37.75%, WER 62.94%→59.94%, 우선용어 F1 88.89%→92.90%, false insertion
+3→1의 개선 후보 신호를 냈습니다. 다만 CER·WER paired bootstrap 95% CI가 0을 포함해
+개선 확정 근거는 아니며, 판정은 다음 wind 개발 Gate 진행이었습니다.
+
+- clean report SHA-256:
+  `c199161c6b3a64c91aa5f3eaf0261eadda6a431a5120ef4f1b9980963b580bae`
 
 clean main commit에서 세 arm을 순차 실행하고 판정까지 완료하려면 다음 runner를 사용합니다.
 동일한 Validation archive·manifest·priority terms, `baseline`, CPU int8, local model만
@@ -389,6 +412,19 @@ pairing, runtime, conversion model binding을 확인하고 private record에서 
 
 통과해도 LoRA를 자동 채택하지 않으며, 실제 현장 무전 성능·현장 안전·상용 운영 성능을
 주장할 수 없습니다.
+
+광주 Training 내부 dev 132건 실제 결과에서 C는 B 대비 CER 55.75%→54.11%로
+1.64%p 낮아졌지만 WER는 72.88%→79.55%로 6.67%p 악화됐습니다. 우선용어 F1은
+82.63%→84.79%로 2.16%p 올라 사전등록 기준 3%p에 못 미쳤고, false insertion은 5→5,
+RTF는 0.1283→0.2705였습니다. CER·WER bootstrap CI도 개선을 확정하지 못했습니다.
+
+따라서 `decision=reject_candidate_keep_operational_baseline`으로 후보를 **기각**했고,
+기존 faster-whisper small·CPU int8 기준선을 유지합니다. downstream과 untouched-region
+평가는 후보 기각 뒤 실행하지 않았습니다.
+
+- wind development report SHA-256:
+  `9db2425dfab2355276912867d9a91d992d3b542255d09983aec46b69ec015f82`
+- 현장 무전·현장 안전·production 채택: **검증되지 않음**
 
 ```bash
 scripts/run_whisper_lora_wind_dev_once.sh \
