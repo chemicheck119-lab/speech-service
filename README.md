@@ -29,7 +29,7 @@
 | 서울·인천 신고음성·모의 통신 왜곡 평가 | 구현·실행 완료(실제 현장 무전 아님) |
 | 60초 이하 PCM WAV bounded 전사 API | 부분 구현 또는 개발용 데모 |
 | Speech API 전용 non-root container | 부분 구현 또는 개발용 데모; Cloud Run preview 배포 |
-| Speech API numeric runtime resource 관측 | 구현 완료; 실제 Cloud Run peak 측정 전 |
+| Speech API numeric runtime resource 관측 | 개발용 preview에서 성공 3건 log 대조 완료; 자원 축소 판단 전 |
 | 실시간 스트리밍 API·패드 연동 | 설계·구현 전 |
 | Whisper tokenizer·data preflight | 구현·실행 완료 |
 | 제한 LoRA local MPS 학습 | Apple M4 MPS full FP32 1 epoch 실행 완료 |
@@ -55,7 +55,7 @@
 로컬 실행과 계약은 [Speech API 문서](docs/SPEECH_API.md)를 참고합니다.
 컨테이너 build·smoke와 Cloud Run 경계는
 [Speech API container runtime](docs/SPEECH_API_CONTAINER.md)을 참고합니다.
-실제 memory peak를 과장하지 않는 계측·축소 Gate는
+실제 memory high-water mark를 과장하지 않는 계측·축소 Gate는
 [Speech API runtime resource 관측](docs/SPEECH_API_RESOURCE_OBSERVABILITY.md)을 참고합니다.
 
 ## 고정 비교실험
