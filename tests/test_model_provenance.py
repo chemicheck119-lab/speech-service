@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
-from unittest.mock import patch
 
 from chemicheck119_speech.model_provenance import (
     MANIFEST_FILENAME,
@@ -76,15 +75,13 @@ class ModelProvenanceTest(unittest.TestCase):
 
         with TemporaryDirectory() as directory:
             output_directory = Path(directory) / "model"
-            with patch(
-                "faster_whisper.utils.download_model", side_effect=fake_download
-            ):
-                result = prepare_model_artifact(
-                    repository="Systran/faster-whisper-small",
-                    revision="5" * 40,
-                    expected_model_bin_sha256=expected_sha256,
-                    output_directory=output_directory,
-                )
+            result = prepare_model_artifact(
+                repository="Systran/faster-whisper-small",
+                revision="5" * 40,
+                expected_model_bin_sha256=expected_sha256,
+                output_directory=output_directory,
+                downloader=fake_download,
+            )
             manifest = json.loads(
                 (output_directory / MANIFEST_FILENAME).read_text(encoding="utf-8")
             )

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
 import hashlib
 import json
 from pathlib import Path
@@ -74,6 +75,7 @@ def prepare_model_artifact(
     revision: str,
     expected_model_bin_sha256: str,
     output_directory: Path,
+    downloader: Callable[..., str] | None = None,
 ) -> dict[str, Any]:
     """Download one pinned model and write a deterministic verified manifest."""
 
@@ -87,10 +89,13 @@ def prepare_model_artifact(
         raise FileExistsError("model output directory is not empty")
     output_directory.mkdir(parents=True, exist_ok=True)
 
-    from faster_whisper.utils import download_model
+    if downloader is None:
+        from faster_whisper.utils import download_model
+
+        downloader = download_model
 
     downloaded = Path(
-        download_model(
+        downloader(
             repository,
             output_dir=str(output_directory),
             revision=revision,
