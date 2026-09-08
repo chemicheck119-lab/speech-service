@@ -52,6 +52,7 @@ MAX_QUEUE_WAIT_SECONDS = 1.0
 MAX_SEGMENTS = 2_000
 MAX_TRANSCRIPT_CHARACTERS = 20_000
 MAX_SEGMENT_CHARACTERS = 2_000
+MAX_SEGMENT_TIMESTAMP_OVERRUN_SECONDS = 0.5
 LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 LOGGER = logging.getLogger("chemicheck119_speech.api")
 KNOWN_ROUTES = frozenset({"/health/live", "/health/ready", "/api/v1/transcriptions"})
@@ -285,7 +286,8 @@ def _response_payload(
             start < 0
             or end < start
             or start + 0.01 < previous_end
-            or end > audio_seconds + 0.1
+            or start > audio_seconds
+            or end > audio_seconds + MAX_SEGMENT_TIMESTAMP_OVERRUN_SECONDS
             or len(segment_text) > MAX_SEGMENT_CHARACTERS
         ):
             raise SpeechApiError(
@@ -293,7 +295,8 @@ def _response_payload(
                 "STT 구간 출력이 올바르지 않습니다.",
                 status_code=502,
             )
-        previous_end = end
+        bounded_end = min(end, audio_seconds)
+        previous_end = bounded_end
         avg_log_probability = _finite_number(
             segment.avg_log_probability, "avg_log_probability"
         )
@@ -312,7 +315,7 @@ def _response_payload(
         segments.append(
             {
                 "start_seconds": start,
-                "end_seconds": end,
+                "end_seconds": bounded_end,
                 "text": segment_text,
                 "quality_signals": {
                     "avg_log_probability": avg_log_probability,
