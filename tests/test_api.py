@@ -35,6 +35,10 @@ class FakeTranscriber:
     actual_device = "cpu"
     actual_compute_type = "int8"
     initialization_fallback = None
+    model_repository = "Systran/faster-whisper-small"
+    model_revision = "5" * 40
+    model_bin_sha256 = "6" * 64
+    model_artifact_verified = True
 
     def __init__(self, *, text: str = "아세톤 누출 의심", fail: bool = False) -> None:
         self.text = text
@@ -100,6 +104,13 @@ class SpeechApiTest(unittest.TestCase):
         self.assertFalse(boundary["cas_confirmation_performed"])
         self.assertFalse(boundary["risk_assessment_performed"])
         self.assertFalse(payload["runtime"]["hotwords_used"])
+        self.assertEqual(
+            "Systran/faster-whisper-small",
+            payload["runtime"]["model_repository"],
+        )
+        self.assertEqual("5" * 40, payload["runtime"]["model_revision"])
+        self.assertEqual("6" * 64, payload["runtime"]["model_bin_sha256"])
+        self.assertTrue(payload["runtime"]["model_artifact_verified"])
         self.assertFalse(payload["input"]["audio_retained"])
         serialized = json.dumps(payload, ensure_ascii=False).lower()
         self.assertNotIn("cas_number", serialized)

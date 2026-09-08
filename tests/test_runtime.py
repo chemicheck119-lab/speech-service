@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 import sys
+from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
+from chemicheck119_speech.model_provenance import (
+    MANIFEST_FILENAME,
+    MANIFEST_SCHEMA_VERSION,
+)
 from chemicheck119_speech.runtime import FasterWhisperTranscriber
 
 
@@ -31,6 +38,36 @@ class FakeWhisperModel:
 
 
 class RuntimeTest(unittest.TestCase):
+    def test_binds_verified_model_provenance_before_inference(self) -> None:
+        with TemporaryDirectory() as directory:
+            model_directory = Path(directory) / "model"
+            model_directory.mkdir()
+            model_path = model_directory / "model.bin"
+            model_path.write_bytes(b"runtime-model")
+            model_sha256 = hashlib.sha256(model_path.read_bytes()).hexdigest()
+            manifest_path = model_directory / MANIFEST_FILENAME
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": MANIFEST_SCHEMA_VERSION,
+                        "repository": "Systran/faster-whisper-small",
+                        "revision": "5" * 40,
+                        "model_bin_sha256": model_sha256,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            module = SimpleNamespace(WhisperModel=FakeWhisperModel)
+            with patch.dict(sys.modules, {"faster_whisper": module}):
+                transcriber = FasterWhisperTranscriber(
+                    model=str(model_directory),
+                    provenance_manifest=str(manifest_path),
+                )
+
+        self.assertTrue(transcriber.model_artifact_verified)
+        self.assertEqual("5" * 40, transcriber.model_revision)
+        self.assertEqual(model_sha256, transcriber.model_bin_sha256)
+
     def test_maps_faster_whisper_timestamps_and_quality_signals(self) -> None:
         module = SimpleNamespace(WhisperModel=FakeWhisperModel)
         with patch.dict(sys.modules, {"faster_whisper": module}):

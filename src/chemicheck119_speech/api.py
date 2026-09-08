@@ -45,6 +45,7 @@ REQUEST_ID_HEADER = "X-Request-Id"
 API_KEY_HEADER = "X-API-Key"
 API_KEY_SCHEME = APIKeyHeader(name=API_KEY_HEADER, auto_error=False)
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
+GIT_COMMIT_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 ALLOWED_CONTENT_TYPES = frozenset({"audio/wav", "audio/x-wav", "audio/wave"})
 MAX_AUDIO_BYTES = 16 * 1024 * 1024
 MAX_AUDIO_SECONDS = 60.0
@@ -77,6 +78,11 @@ def _env_flag(name: str, default: bool = False) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _service_git_commit() -> str | None:
+    value = (os.getenv("CHEMICHECK119_SPEECH_GIT_COMMIT") or "").strip()
+    return value if GIT_COMMIT_PATTERN.fullmatch(value) else None
 
 
 def _request_id(request: Request) -> str:
@@ -358,7 +364,14 @@ def _response_payload(
                 "implementation": "faster-whisper",
                 "package_version": "1.2.1",
                 "service_version": __version__,
+                "service_git_commit": _service_git_commit(),
                 "model": model_name,
+                "model_repository": getattr(transcriber, "model_repository", None),
+                "model_revision": getattr(transcriber, "model_revision", None),
+                "model_bin_sha256": getattr(transcriber, "model_bin_sha256", None),
+                "model_artifact_verified": bool(
+                    getattr(transcriber, "model_artifact_verified", False)
+                ),
                 "requested_device": requested_device,
                 "requested_compute_type": requested_compute_type,
                 "actual_device": actual_device,
@@ -390,6 +403,7 @@ def _load_transcriber_from_env() -> FasterWhisperTranscriber:
         cpu_threads=int(os.getenv("CHEMICHECK119_SPEECH_CPU_THREADS", "4")),
         download_root=os.getenv("CHEMICHECK119_SPEECH_DOWNLOAD_ROOT"),
         local_files_only=_env_flag("CHEMICHECK119_SPEECH_LOCAL_FILES_ONLY", True),
+        provenance_manifest=os.getenv("CHEMICHECK119_SPEECH_MODEL_PROVENANCE_MANIFEST"),
     )
 
 

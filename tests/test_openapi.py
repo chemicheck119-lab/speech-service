@@ -33,6 +33,10 @@ class SpeechOpenApiTest(unittest.TestCase):
             False,
             boundary["properties"]["cas_confirmation_performed"]["const"],
         )
+        runtime = schema["components"]["schemas"]["RuntimeResponse"]
+        self.assertIn("model_revision", runtime["properties"])
+        self.assertIn("model_bin_sha256", runtime["properties"])
+        self.assertIn("model_artifact_verified", runtime["properties"])
 
 
 if __name__ == "__main__":
