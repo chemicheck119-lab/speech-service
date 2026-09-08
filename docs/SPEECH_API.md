@@ -58,3 +58,14 @@ curl --fail-with-body \
 
 다음 단계에서 Analysis와 연결할 때도 같은 `X-Request-Id`를 전달하되, 전사문은 후보 탐색의
 입력일 뿐입니다. Resolver 후보는 사용자 확인 전까지 Rule Engine 입력으로 승격할 수 없습니다.
+
+## Runtime resource 관측
+
+production entrypoint는 성공 전사 직후 cgroup memory current·peak·limit와 process
+current·max RSS를 숫자로만 structured log에 기록합니다. API 응답 schema에는 resource 값을
+추가하지 않습니다. 관측 실패도 전사 성공을 실패로 바꾸지 않습니다.
+
+음성·전사문·segment·API Key·CAS·위험도는 resource event에 기록하지 않습니다. 현재는
+계측 코드와 테스트가 구현된 상태이며 실제 Cloud Run candidate의 peak는 아직 측정하지
+않았습니다. 필드 의미와 배포·축소 Gate는
+[Speech API runtime resource 관측](SPEECH_API_RESOURCE_OBSERVABILITY.md)을 따릅니다.
