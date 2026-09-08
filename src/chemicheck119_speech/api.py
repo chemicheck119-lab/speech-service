@@ -38,6 +38,7 @@ from chemicheck119_speech.runtime import (
     Transcript,
     Transcriber,
 )
+from chemicheck119_speech.resource_observation import capture_resource_snapshot
 
 
 REQUEST_ID_HEADER = "X-Request-Id"
@@ -54,6 +55,7 @@ MAX_SEGMENT_CHARACTERS = 2_000
 LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 LOGGER = logging.getLogger("chemicheck119_speech.api")
 KNOWN_ROUTES = frozenset({"/health/live", "/health/ready", "/api/v1/transcriptions"})
+APPLICATION_LOG_HANDLER_MARKER = "_chemicheck119_application_handler"
 
 
 class SpeechApiError(RuntimeError):
@@ -82,6 +84,42 @@ def _request_id(request: Request) -> str:
 
 def _route_label(path: str) -> str:
     return path if path in KNOWN_ROUTES else "<unmatched>"
+
+
+def _configure_application_logging(logger: logging.Logger = LOGGER) -> None:
+    """Emit application events as one-line JSON under Uvicorn."""
+
+    if not any(
+        getattr(handler, APPLICATION_LOG_HANDLER_MARKER, False)
+        for handler in logger.handlers
+    ):
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        setattr(handler, APPLICATION_LOG_HANDLER_MARKER, True)
+        logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+
+
+def _log_resource_sample(
+    *, request_id: str, processing_seconds: float, audio_seconds: float
+) -> None:
+    event: dict[str, Any] = {
+        "event": "speech_resource_sample",
+        "request_id": request_id,
+        "processing_seconds": round(processing_seconds, 6),
+        "audio_seconds": round(audio_seconds, 6),
+    }
+    try:
+        event.update(capture_resource_snapshot())
+    except Exception as error:
+        event.update(
+            {
+                "resource_observation_available": False,
+                "resource_observation_error_type": type(error).__name__,
+            }
+        )
+    LOGGER.info(json.dumps(event))
 
 
 def _error_response(request_id: str, error: SpeechApiError) -> JSONResponse:
@@ -566,13 +604,19 @@ def create_app(
                     ) from error
                 elapsed = time.perf_counter() - started
                 try:
-                    return _response_payload(
+                    response = _response_payload(
                         request_id=_request_id(request),
                         transcript=transcript,
                         wav=wav,
                         elapsed_seconds=elapsed,
                         transcriber=active_transcriber,
                     )
+                    _log_resource_sample(
+                        request_id=_request_id(request),
+                        processing_seconds=elapsed,
+                        audio_seconds=float(wav["duration_seconds"]),
+                    )
+                    return response
                 except SpeechApiError:
                     raise
                 except Exception as error:
@@ -611,6 +655,7 @@ def run() -> None:
         or _env_flag("CHEMICHECK119_SPEECH_ALLOW_ANONYMOUS", False)
     ):
         raise RuntimeError("로컬호스트 외 Speech API는 API Key가 필요합니다.")
+    _configure_application_logging()
     uvicorn.run(
         "chemicheck119_speech.api:app",
         host=host,
