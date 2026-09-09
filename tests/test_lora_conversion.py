@@ -6,7 +6,10 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from chemicheck119_speech.lora_conversion import validate_training_run
+from chemicheck119_speech.lora_conversion import (
+    _save_processor_for_ctranslate2,
+    validate_training_run,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -65,6 +68,28 @@ def _training_fixture(root: Path) -> Path:
 
 
 class LoraConversionValidationTest(unittest.TestCase):
+    def test_persists_feature_extractor_for_transformers_5_conversion(self) -> None:
+        class FeatureExtractor:
+            def save_pretrained(self, destination: Path) -> None:
+                (Path(destination) / "preprocessor_config.json").write_text(
+                    "{}", encoding="utf-8"
+                )
+
+        class Processor:
+            feature_extractor = FeatureExtractor()
+
+            def save_pretrained(self, destination: Path) -> None:
+                (Path(destination) / "tokenizer.json").write_text(
+                    "{}", encoding="utf-8"
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory)
+            _save_processor_for_ctranslate2(Processor(), destination)
+
+            self.assertTrue((destination / "tokenizer.json").is_file())
+            self.assertTrue((destination / "preprocessor_config.json").is_file())
+
     def test_accepts_exact_zero_cost_training_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             training = _training_fixture(Path(directory))

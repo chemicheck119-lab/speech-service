@@ -188,6 +188,23 @@ def _harden_tree(root: Path) -> None:
         path.chmod(0o700 if path.is_dir() else 0o600)
 
 
+def _save_processor_for_ctranslate2(processor: object, destination: Path) -> None:
+    """Persist the tokenizer and feature extractor files required by CTranslate2."""
+
+    save_processor = getattr(processor, "save_pretrained", None)
+    feature_extractor = getattr(processor, "feature_extractor", None)
+    save_feature_extractor = getattr(feature_extractor, "save_pretrained", None)
+    if not callable(save_processor) or not callable(save_feature_extractor):
+        raise RuntimeError("Whisper processor cannot persist conversion artifacts")
+    save_processor(destination)
+    # Transformers 5 writes processor_config.json from ProcessorMixin, while
+    # CTranslate2 4.8.2 still requires preprocessor_config.json explicitly.
+    save_feature_extractor(destination)
+    for filename in COPY_FILES:
+        if not (destination / filename).is_file():
+            raise RuntimeError(f"Whisper processor did not persist {filename}")
+
+
 def convert_lora_arms(
     *,
     training_dir: Path,
@@ -254,7 +271,7 @@ def convert_lora_arms(
         processor = WhisperProcessor.from_pretrained(
             str(training_dir / "processor"), local_files_only=True
         )
-        processor.save_pretrained(merged_root)
+        _save_processor_for_ctranslate2(processor, merged_root)
         TransformersConverter(
             str(merged_root),
             copy_files=COPY_FILES,

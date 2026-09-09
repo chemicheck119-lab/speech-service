@@ -15,9 +15,13 @@ from .lora_protocol import load_experiment_config
 
 
 EXECUTION_PROTOCOL_ID = "whisper-small-lora-gwangju-execution-v1"
+EXECUTION_PROTOCOL_ID_V2 = "whisper-small-lora-gwangju-execution-v2"
 ARTIFACT_PROTOCOL_ID = "whisper-lora-clean-wind-snr0-v1"
 REGISTERED_EXECUTION_CONFIG_SHA256 = (
     "4ae92e2bcff346af6559a84346b293e2dd86d364f1caf29b006c9cd9aa47283d"
+)
+REGISTERED_EXECUTION_CONFIG_V2_SHA256 = (
+    "53d9908df32d653828e2dd0cfe69107302b555a8801f095f5daaae8befdd2fe2"
 )
 EXPECTED_EXPERIMENT_CONFIG_SHA256 = (
     "a97e0f7c8f9e3948f4e919e60f9a6707323c4fab89a4c2eea8f83b010ad4750a"
@@ -183,11 +187,19 @@ def _membership_digest(record_ids: set[str]) -> str:
 
 def _load_execution_config(path: Path) -> tuple[dict[str, object], bytes]:
     config, content = _read_json(path, "execution config")
-    if hashlib.sha256(content).hexdigest() != REGISTERED_EXECUTION_CONFIG_SHA256:
+    protocol_id = config.get("protocol_id")
+    registered_sha256 = {
+        EXECUTION_PROTOCOL_ID: REGISTERED_EXECUTION_CONFIG_SHA256,
+        EXECUTION_PROTOCOL_ID_V2: REGISTERED_EXECUTION_CONFIG_V2_SHA256,
+    }.get(protocol_id)
+    if (
+        registered_sha256 is None
+        or hashlib.sha256(content).hexdigest() != registered_sha256
+    ):
         raise ValueError("execution config SHA-256 is not the registered artifact")
     if (
         config.get("schema_version") != "1.0.0"
-        or config.get("protocol_id") != EXECUTION_PROTOCOL_ID
+        or protocol_id not in {EXECUTION_PROTOCOL_ID, EXECUTION_PROTOCOL_ID_V2}
         or config.get("fact_status") != "설계 완료·구현 전"
         or config.get("evidence_scope") != EXPECTED_EVIDENCE_SCOPE
         or config.get("automatic_training_allowed") is not False

@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 import tempfile
+import tomllib
 import unittest
 from unittest.mock import call, patch
 
@@ -30,6 +31,7 @@ from tests.test_lora_data_preflight import _fixture
 
 ROOT = Path(__file__).resolve().parents[1]
 EXECUTION_CONFIG = ROOT / "config" / "whisper_lora_execution_v1.json"
+ACTIVE_EXECUTION_CONFIG = ROOT / "config" / "whisper_lora_execution_v2.json"
 EXPERIMENT_CONFIG = ROOT / "config" / "whisper_lora_experiment_v1.json"
 LOCAL_MPS_RUNNER = ROOT / "scripts" / "run_whisper_lora_mps_once.sh"
 RUNNER_REVISION = "a" * 40
@@ -214,6 +216,8 @@ class LoraTrainingTest(unittest.TestCase):
 
     def test_local_mps_runner_has_timeout_and_private_cleanup(self) -> None:
         source = LOCAL_MPS_RUNNER.read_text(encoding="utf-8")
+        self.assertIn("whisper_lora_execution_v2.json", source)
+        self.assertNotIn("whisper_lora_execution_v1.json", source)
         self.assertIn('status --porcelain', source)
         self.assertIn('external_timeout_seconds', source)
         self.assertIn('kill -TERM "${CHILD_PID}"', source)
@@ -221,6 +225,21 @@ class LoraTrainingTest(unittest.TestCase):
         self.assertIn('caffeinate -dimsu', source)
         self.assertIn('numeric-smoke', source)
         self.assertIn('EXPECTED_REPORT', source)
+
+    def test_active_runner_config_matches_installable_lora_extra(self) -> None:
+        execution = json.loads(ACTIVE_EXECUTION_CONFIG.read_text(encoding="utf-8"))
+        pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+        pins = {
+            requirement.split("==", 1)[0]: requirement.split("==", 1)[1]
+            .split(";", 1)[0]
+            .strip()
+            for requirement in pyproject["project"]["optional-dependencies"]["lora"]
+        }
+        packages = execution["runtime"]["packages"]
+
+        self.assertTrue(pins["torch"].startswith(packages["torch_expected_prefix"]))
+        for name in ("transformers", "peft", "accelerate", "numpy", "scipy"):
+            self.assertEqual(packages[name], pins[name])
 
     def test_whisper_uses_generic_peft_forward_wrapper(self) -> None:
         experiment = json.loads(EXPERIMENT_CONFIG.read_text(encoding="utf-8"))

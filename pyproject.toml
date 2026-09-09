@@ -25,7 +25,8 @@ lora = [
   "numpy==2.3.5",
   "peft==0.20.0",
   "scipy==1.16.3",
-  "transformers==4.57.6",
+  "torch==2.14.0; platform_system == 'Darwin' and platform_machine == 'arm64'",
+  "transformers==5.10.1",
 ]
 
 [project.scripts]

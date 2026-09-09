@@ -82,7 +82,7 @@ harness, immutable clean/wind artifact, 실행 직전 비용 견적입니다.
 
 ```bash
 chemicheck119-speech-lora-data-preflight \
-  --execution-config config/whisper_lora_execution_v1.json \
+  --execution-config config/whisper_lora_execution_v2.json \
   --experiment-config config/whisper_lora_experiment_v1.json \
   --artifact-root /secure/gwangju-lora-artifacts-v1 \
   --output /secure/lora-data-preflight.json
@@ -112,7 +112,7 @@ tokenizer 검사에서도 이 한계는 해소되지 않습니다. 따라서 결
 
 1. config와 비공개 data artifact hash를 다시 검증합니다.
 2. 24시간 이내 확인서로 증분 서버비 0원과 전체 70,000원 상한을 확인합니다.
-3. Python 3.11·arm64·MPS·PyTorch 2.9.x·고정 package만 허용합니다.
+3. Python 3.11·arm64·MPS·PyTorch 2.14.x·Transformers 5.10.1·고정 package만 허용합니다.
 4. record별 clean 60% / `wind_snr0` 40%를 seed 9119로 선택하고 각 발화를 한 번만 사용합니다.
 5. 1 epoch 뒤 adapter와 processor, 집계 전용 보고서만 비공개 경로에 원자적으로 저장합니다.
 6. 임시 음성·Trainer 파일은 성공과 실패 모두 제거합니다.

@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 SCRIPT_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPOSITORY_ROOT="$(cd "${SCRIPT_DIRECTORY}/.." && pwd)"
-EXECUTION_CONFIG="${REPOSITORY_ROOT}/config/whisper_lora_execution_v1.json"
+EXECUTION_CONFIG="${REPOSITORY_ROOT}/config/whisper_lora_execution_v2.json"
 EXPERIMENT_CONFIG="${REPOSITORY_ROOT}/config/whisper_lora_experiment_v1.json"
 PRIORITY_TERMS="${REPOSITORY_ROOT}/config/domain_hotwords.txt"
 

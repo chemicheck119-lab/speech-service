@@ -32,6 +32,7 @@
 | Speech API numeric runtime resource 관측 | 개발용 preview에서 성공 3건 log 대조 완료; 자원 축소 판단 전 |
 | 실시간 스트리밍 API·패드 연동 | 설계·구현 전 |
 | Whisper tokenizer·data preflight | 구현·실행 완료 |
+| Transformers 5 LoRA 호환성 | 조건부 채택·후보 성능 기각 유지 |
 | 제한 LoRA local MPS 학습 | Apple M4 MPS full FP32 1 epoch 실행 완료 |
 | LoRA numeric smoke Gate | full FP32 2-step 실행·통과 |
 | LoRA A/B/C 변환 pipeline | 구현·실행 완료 |
@@ -39,6 +40,9 @@
 | LoRA `wind_snr0` 개발 평가 | 132건 실행·후보 기각·기준선 유지 |
 | 화학용어 사후 자동교정 | 미구현; 원문 보존 원칙상 현재 범위 제외 |
 | 현장 무전 성능 | 검증되지 않음 |
+
+Transformers 5 dependency·tokenizer·MPS·기존 adapter 변환 검증과 주장 한계는
+[Transformers 5 LoRA 호환성 검증](docs/TRANSFORMERS_5_COMPATIBILITY.md)에 기록합니다.
 
 ## Bounded 전사 API
 
@@ -216,7 +220,7 @@ archive·manifest SHA-256, partition membership, record 중복, utterance 길이
 
 ```bash
 chemicheck119-speech-lora-data-preflight \
-  --execution-config config/whisper_lora_execution_v1.json \
+  --execution-config config/whisper_lora_execution_v2.json \
   --experiment-config config/whisper_lora_experiment_v1.json \
   --artifact-root /secure/gwangju-lora-artifacts-v1 \
   --output /secure/lora-data-preflight.json
@@ -233,7 +237,7 @@ token-length 조건만 확인하며 모델 개선을 뜻하지 않습니다.
 
 ```bash
 chemicheck119-speech-lora-tokenizer-preflight \
-  --execution-config config/whisper_lora_execution_v1.json \
+  --execution-config config/whisper_lora_execution_v2.json \
   --experiment-config config/whisper_lora_experiment_v1.json \
   --artifact-root /secure/gwangju-lora-artifacts-v1 \
   --output /secure/lora-tokenizer-preflight.json
@@ -246,7 +250,7 @@ base 병합, CTranslate2 변환, 운영 채택·배포는 수행하지 않습니
 fail-closed로 확인합니다.
 
 - 등록된 config·data artifact SHA-256과 tokenizer 160-token 상한
-- 소유한 M4·24GB의 Python 3.11, PyTorch 2.9.x, arm64·MPS
+- 소유한 M4·24GB의 Python 3.11, PyTorch 2.14.x, Transformers 5.10.1, arm64·MPS
 - 24시간 이내의 증분 서버비 0원 확인서와 70,000원 전체 비용 상한
 - record 단위 고정 60:40 clean/`wind_snr0` 배정과 발화 1회 학습
 - commit-bound 단일 사용 authorization과 원격 원자적 claim
@@ -269,7 +273,7 @@ runner 내부 명령은 다음 계약을 고정합니다.
 
 ```bash
 chemicheck119-speech-lora-train \
-  --execution-config config/whisper_lora_execution_v1.json \
+  --execution-config config/whisper_lora_execution_v2.json \
   --experiment-config config/whisper_lora_experiment_v1.json \
   --artifact-root /secure/gwangju-lora-artifacts-v1 \
   --cost-quote /secure/current-cost-quote.json \
@@ -331,7 +335,7 @@ C는 같은 base에 adapter를 안전 병합한 candidate입니다. 변환 효�
 ```bash
 chemicheck119-speech-lora-convert \
   --training-dir /private/training-run-UNIQUE \
-  --execution-config config/whisper_lora_execution_v1.json \
+  --execution-config config/whisper_lora_execution_v2.json \
   --experiment-config config/whisper_lora_experiment_v1.json \
   --output-dir /private/conversion-run-UNIQUE \
   --converter-revision "$(git rev-parse HEAD)"
