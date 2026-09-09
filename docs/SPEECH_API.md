@@ -47,14 +47,36 @@ curl --fail-with-body \
 | 추론 실패 | 내부 오류 내용을 숨기고 retryable `503` |
 | 모델 출력 이상 | 비정상 구간·시간·품질 신호를 `502`로 차단 |
 
+Whisper의 구간 타임스탬프는 20ms 단위의 모델 출력이라 마지막 구간이 실제 WAV 끝을 조금
+넘을 수 있습니다. 입력 끝을 최대 0.5초 초과한 `end_seconds`만 실제 입력 길이로 제한해
+반환하고, 구간 시작이 입력 밖에 있거나 초과 폭이 0.5초보다 크면 계속 `502`로 차단합니다.
+이 정규화는 전사문을 고치거나 누락 단어를 만들어내지 않습니다.
+
 ## 응답 해석
 
 - `TRANSCRIBED`: 비어 있지 않은 전사문을 반환했습니다. 정확하거나 확인됐다는 뜻은 아닙니다.
 - `ABSTAINED_NO_TRANSCRIPT`: 음성 또는 인식 가능한 발화가 없어 빈 전사로 기권했습니다.
 - `quality_signals`: faster-whisper가 제공한 보정되지 않은 디코딩 신호입니다. 정답 확률로
   표시하거나 CAS 자동확정 threshold로 사용하지 않습니다.
+- `runtime.model_revision`과 `runtime.model_bin_sha256`: 배포 컨테이너가 시작할 때 실제
+  `model.bin`을 manifest와 대조해 일치한 경우에만 채워집니다.
+- `runtime.model_artifact_verified`: 모델 파일 동일성을 뜻할 뿐 전사 정확도나 현장 안전성
+  검증을 뜻하지 않습니다. 로컬 개발처럼 provenance manifest를 사용하지 않으면 `false`입니다.
+- `runtime.service_git_commit`: 40자리 commit이 image build에 주입된 경우에만 노출됩니다.
+  컨테이너 image digest와 함께 비교해야 배포 코드의 출처를 확인할 수 있습니다.
 - `safety_boundary`: Speech Service가 물질 식별·CAS 확인·위험 판단을 수행하지 않았음을
   명시합니다.
 
 다음 단계에서 Analysis와 연결할 때도 같은 `X-Request-Id`를 전달하되, 전사문은 후보 탐색의
 입력일 뿐입니다. Resolver 후보는 사용자 확인 전까지 Rule Engine 입력으로 승격할 수 없습니다.
+
+## Runtime resource 관측
+
+production entrypoint는 성공 전사 직후 cgroup memory current·peak·limit와 process
+current·max RSS를 숫자로만 structured log에 기록합니다. API 응답 schema에는 resource 값을
+추가하지 않습니다. 관측 실패도 전사 성공을 실패로 바꾸지 않습니다.
+
+음성·전사문·segment·API Key·CAS·위험도는 resource event에 기록하지 않습니다. 현재는
+계측 코드와 테스트가 구현된 상태이며 실제 Cloud Run candidate의 peak는 아직 측정하지
+않았습니다. 필드 의미와 배포·축소 Gate는
+[Speech API runtime resource 관측](SPEECH_API_RESOURCE_OBSERVABILITY.md)을 따릅니다.

@@ -1,0 +1,36 @@
+name: Speech API Container
+
+on:
+  pull_request:
+    paths:
+      - "Dockerfile.api"
+      - ".dockerignore"
+      - "pyproject.toml"
+      - "scripts/smoke_speech_api_container.sh"
+      - ".github/workflows/api-container.yml"
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile.api"
+      - ".dockerignore"
+      - "pyproject.toml"
+      - "scripts/smoke_speech_api_container.sh"
+      - ".github/workflows/api-container.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: speech-api-container-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: build-and-boundary-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Model 없는 API image 경계 검사
+        run: bash scripts/smoke_speech_api_container.sh

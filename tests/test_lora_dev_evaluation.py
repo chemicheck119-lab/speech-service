@@ -9,8 +9,6 @@ from unittest.mock import patch
 
 from chemicheck119_speech.lora_dev_evaluation import (
     EXPECTED_CONDITION,
-    EXPECTED_DATASET_ID,
-    EXPECTED_DATASET_VERSION,
     EXPECTED_EVIDENCE_SCOPE,
     EXPECTED_RECORDS,
     _secure_write_results,
@@ -47,8 +45,11 @@ class LoraDevelopmentEvaluationTest(unittest.TestCase):
             artifacts.mkdir()
             conversion.mkdir()
             manifest = {
-                "dataset_id": EXPECTED_DATASET_ID,
-                "dataset_version": EXPECTED_DATASET_VERSION,
+                "dataset_id": "aihub_71768_gwangju_fire_lora_dev_wind_snr0",
+                "dataset_version": (
+                    "dataset-71768_downloaded-2026-09-05"
+                    "+whisper-lora-clean-wind-snr0-v1"
+                ),
                 "usage_role": "development",
                 "classification": "derived",
                 "evidence_scope": EXPECTED_EVIDENCE_SCOPE,
@@ -70,7 +71,7 @@ class LoraDevelopmentEvaluationTest(unittest.TestCase):
             labels_path.write_bytes(b"labels")
             snapshots = [
                 {"file": path.name, "sha256": _sha256(path)}
-                for path in (manifest_path, audio_path, labels_path)
+                for path in (audio_path, labels_path)
             ]
             arm = "C_lora_merged_candidate"
             model_path = conversion / "C"
@@ -89,6 +90,13 @@ class LoraDevelopmentEvaluationTest(unittest.TestCase):
             }
             preflight = {
                 "artifact_snapshots": snapshots,
+                "manifest_snapshots": [
+                    {
+                        "partition": "dev",
+                        "condition": EXPECTED_CONDITION,
+                        "sha256": _sha256(manifest_path),
+                    }
+                ],
                 "execution_config_sha256": "1" * 64,
                 "experiment_config_sha256": "2" * 64,
                 "run_summary_sha256": "3" * 64,
@@ -115,6 +123,15 @@ class LoraDevelopmentEvaluationTest(unittest.TestCase):
             self.assertEqual(model_path, result["model_path"])
             self.assertEqual(
                 EXPECTED_RECORDS, result["dataset_provenance"]["record_count"]
+            )
+            self.assertEqual(
+                "aihub_71768_gwangju_fire_lora_dev_wind_snr0",
+                result["dataset_provenance"]["dataset_id"],
+            )
+            self.assertEqual(
+                "dataset-71768_downloaded-2026-09-05"
+                "+whisper-lora-clean-wind-snr0-v1",
+                result["dataset_provenance"]["dataset_version"],
             )
             self.assertTrue(result["dataset_provenance"]["used_for_tuning"])
             self.assertEqual("development", result["dataset_provenance"]["usage_role"])

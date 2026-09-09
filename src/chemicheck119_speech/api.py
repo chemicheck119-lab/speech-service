@@ -38,12 +38,14 @@ from chemicheck119_speech.runtime import (
     Transcript,
     Transcriber,
 )
+from chemicheck119_speech.resource_observation import capture_resource_snapshot
 
 
 REQUEST_ID_HEADER = "X-Request-Id"
 API_KEY_HEADER = "X-API-Key"
 API_KEY_SCHEME = APIKeyHeader(name=API_KEY_HEADER, auto_error=False)
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
+GIT_COMMIT_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 ALLOWED_CONTENT_TYPES = frozenset({"audio/wav", "audio/x-wav", "audio/wave"})
 MAX_AUDIO_BYTES = 16 * 1024 * 1024
 MAX_AUDIO_SECONDS = 60.0
@@ -51,9 +53,11 @@ MAX_QUEUE_WAIT_SECONDS = 1.0
 MAX_SEGMENTS = 2_000
 MAX_TRANSCRIPT_CHARACTERS = 20_000
 MAX_SEGMENT_CHARACTERS = 2_000
+MAX_SEGMENT_TIMESTAMP_OVERRUN_SECONDS = 0.5
 LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 LOGGER = logging.getLogger("chemicheck119_speech.api")
 KNOWN_ROUTES = frozenset({"/health/live", "/health/ready", "/api/v1/transcriptions"})
+APPLICATION_LOG_HANDLER_MARKER = "_chemicheck119_application_handler"
 
 
 class SpeechApiError(RuntimeError):
@@ -76,12 +80,53 @@ def _env_flag(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _service_git_commit() -> str | None:
+    value = (os.getenv("CHEMICHECK119_SPEECH_GIT_COMMIT") or "").strip()
+    return value if GIT_COMMIT_PATTERN.fullmatch(value) else None
+
+
 def _request_id(request: Request) -> str:
     return str(request.state.request_id)
 
 
 def _route_label(path: str) -> str:
     return path if path in KNOWN_ROUTES else "<unmatched>"
+
+
+def _configure_application_logging(logger: logging.Logger = LOGGER) -> None:
+    """Emit application events as one-line JSON under Uvicorn."""
+
+    if not any(
+        getattr(handler, APPLICATION_LOG_HANDLER_MARKER, False)
+        for handler in logger.handlers
+    ):
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        setattr(handler, APPLICATION_LOG_HANDLER_MARKER, True)
+        logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+
+
+def _log_resource_sample(
+    *, request_id: str, processing_seconds: float, audio_seconds: float
+) -> None:
+    event: dict[str, Any] = {
+        "event": "speech_resource_sample",
+        "request_id": request_id,
+        "processing_seconds": round(processing_seconds, 6),
+        "audio_seconds": round(audio_seconds, 6),
+    }
+    try:
+        event.update(capture_resource_snapshot())
+    except Exception as error:
+        event.update(
+            {
+                "resource_observation_available": False,
+                "resource_observation_error_type": type(error).__name__,
+            }
+        )
+    LOGGER.info(json.dumps(event))
 
 
 def _error_response(request_id: str, error: SpeechApiError) -> JSONResponse:
@@ -247,7 +292,8 @@ def _response_payload(
             start < 0
             or end < start
             or start + 0.01 < previous_end
-            or end > audio_seconds + 0.1
+            or start > audio_seconds
+            or end > audio_seconds + MAX_SEGMENT_TIMESTAMP_OVERRUN_SECONDS
             or len(segment_text) > MAX_SEGMENT_CHARACTERS
         ):
             raise SpeechApiError(
@@ -255,7 +301,8 @@ def _response_payload(
                 "STT 구간 출력이 올바르지 않습니다.",
                 status_code=502,
             )
-        previous_end = end
+        bounded_end = min(end, audio_seconds)
+        previous_end = bounded_end
         avg_log_probability = _finite_number(
             segment.avg_log_probability, "avg_log_probability"
         )
@@ -274,7 +321,7 @@ def _response_payload(
         segments.append(
             {
                 "start_seconds": start,
-                "end_seconds": end,
+                "end_seconds": bounded_end,
                 "text": segment_text,
                 "quality_signals": {
                     "avg_log_probability": avg_log_probability,
@@ -317,7 +364,14 @@ def _response_payload(
                 "implementation": "faster-whisper",
                 "package_version": "1.2.1",
                 "service_version": __version__,
+                "service_git_commit": _service_git_commit(),
                 "model": model_name,
+                "model_repository": getattr(transcriber, "model_repository", None),
+                "model_revision": getattr(transcriber, "model_revision", None),
+                "model_bin_sha256": getattr(transcriber, "model_bin_sha256", None),
+                "model_artifact_verified": bool(
+                    getattr(transcriber, "model_artifact_verified", False)
+                ),
                 "requested_device": requested_device,
                 "requested_compute_type": requested_compute_type,
                 "actual_device": actual_device,
@@ -349,6 +403,7 @@ def _load_transcriber_from_env() -> FasterWhisperTranscriber:
         cpu_threads=int(os.getenv("CHEMICHECK119_SPEECH_CPU_THREADS", "4")),
         download_root=os.getenv("CHEMICHECK119_SPEECH_DOWNLOAD_ROOT"),
         local_files_only=_env_flag("CHEMICHECK119_SPEECH_LOCAL_FILES_ONLY", True),
+        provenance_manifest=os.getenv("CHEMICHECK119_SPEECH_MODEL_PROVENANCE_MANIFEST"),
     )
 
 
@@ -566,13 +621,19 @@ def create_app(
                     ) from error
                 elapsed = time.perf_counter() - started
                 try:
-                    return _response_payload(
+                    response = _response_payload(
                         request_id=_request_id(request),
                         transcript=transcript,
                         wav=wav,
                         elapsed_seconds=elapsed,
                         transcriber=active_transcriber,
                     )
+                    _log_resource_sample(
+                        request_id=_request_id(request),
+                        processing_seconds=elapsed,
+                        audio_seconds=float(wav["duration_seconds"]),
+                    )
+                    return response
                 except SpeechApiError:
                     raise
                 except Exception as error:
@@ -611,6 +672,7 @@ def run() -> None:
         or _env_flag("CHEMICHECK119_SPEECH_ALLOW_ANONYMOUS", False)
     ):
         raise RuntimeError("로컬호스트 외 Speech API는 API Key가 필요합니다.")
+    _configure_application_logging()
     uvicorn.run(
         "chemicheck119_speech.api:app",
         host=host,

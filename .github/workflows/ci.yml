@@ -23,3 +23,5 @@ jobs:
       - run: PYTHONPATH=src python -m unittest discover -s tests -v
       - name: Speech OpenAPI 계약 검사
         run: PYTHONPATH=src python scripts/export_speech_openapi.py --check
+      - name: API container 경계 검사
+        run: PYTHONPATH=src python -m unittest tests.test_api_container_contract -v
