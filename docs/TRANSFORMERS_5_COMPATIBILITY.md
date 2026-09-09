@@ -113,3 +113,16 @@ PYTHONPATH=src python scripts/export_speech_openapi.py --check
 
 현재 후보 모델은 계속 기각 상태이며 운영 faster-whisper small CPU int8 기준선에는 이 변경을
 적용하지 않습니다.
+
+## 남은 Accelerate 경고
+
+2026-09-09 재확인 결과 `accelerate<=1.14.0`의 sharded checkpoint `weight_map` path traversal·
+denial-of-service 경고(CVE-2026-69112)가 추가로 열려 있으며 공개된 수정 버전이 없습니다.
+따라서 본 변경을 “보안 경고 0건”으로 표현하지 않습니다.
+
+현재 코드에서 취약 함수 `load_checkpoint_in_model`과 `load_checkpoint_and_dispatch`를 직접
+호출하지 않습니다. LoRA 경로도 `openai/whisper-small`과 40자리 고정 revision만 허용하고,
+`trust_remote_code`를 사용하지 않으며, local adapter는 training report의 전체 artifact
+SHA-256과 대조합니다. 이는 노출을 줄이는 임시 경계이지 취약점 자체의 수정은 아닙니다.
+수정 버전이 공개되기 전에는 외부·사용자 제공 checkpoint와 index JSON을 이 개발 환경에서
+로드하지 않습니다.
