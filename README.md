@@ -30,13 +30,17 @@
 | 60초 이하 PCM WAV bounded 전사 API | 부분 구현 또는 개발용 데모 |
 | 실시간 스트리밍 API·패드 연동 | 설계·구현 전 |
 | Whisper tokenizer·data preflight | 구현·실행 완료 |
-| 제한 LoRA local MPS 학습 harness | 구현 완료·1차 FP16 실행 수치 불안정으로 기각 |
+| Transformers 5 LoRA 호환성 | 조건부 채택·후보 성능 기각 유지 |
+| 제한 LoRA local MPS 학습 harness | 구현·실행 완료, full FP32 후보 후단 Gate 기각 |
 | LoRA numeric smoke Gate | full FP32 2-step 실행·통과 |
-| LoRA A/B/C 변환 pipeline | 구현 완료·유효 adapter 부재로 실행 전 |
-| LoRA A/B/C 잠금 평가 판정기 | 구현 완료·유효 adapter 부재로 실행 전 |
-| LoRA A/B/C 잠금 평가 runner | 구현 완료·유효 adapter 부재로 실행 전 |
+| LoRA A/B/C 변환 pipeline | 구현·실행 완료 |
+| LoRA A/B/C 잠금 평가 판정기 | 구현·실행 완료, 후보 조건부 진행 후 최종 기각 |
+| LoRA A/B/C 잠금 평가 runner | 구현·실행 완료 |
 | 화학용어 사후 자동교정 | 미구현; 원문 보존 원칙상 현재 범위 제외 |
 | 현장 무전 성능 | 검증되지 않음 |
+
+Transformers 5 dependency·tokenizer·MPS·기존 adapter 변환 검증과 주장 한계는
+[Transformers 5 LoRA 호환성 검증](docs/TRANSFORMERS_5_COMPATIBILITY.md)에 기록합니다.
 
 ## Bounded 전사 API
 

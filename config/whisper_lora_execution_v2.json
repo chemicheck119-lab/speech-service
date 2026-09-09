@@ -1,0 +1,104 @@
+{
+  "schema_version": "1.0.0",
+  "protocol_id": "whisper-small-lora-gwangju-execution-v2",
+  "fact_status": "설계 완료·구현 전",
+  "evidence_scope": "AIHub 신고전화와 절차적 모의 통신 왜곡; 실제 현장 무전 검증 아님",
+  "experiment_config": {
+    "path": "config/whisper_lora_experiment_v1.json",
+    "sha256": "a97e0f7c8f9e3948f4e919e60f9a6707323c4fab89a4c2eea8f83b010ad4750a"
+  },
+  "derived_data": {
+    "artifact_protocol_id": "whisper-lora-clean-wind-snr0-v1",
+    "gcs_prefix": "gs://chemi-check-ml-data-181872008704/derived/aihub/71768/gwangju-fire/lora-v1",
+    "run_summary_file": "run-summary.json",
+    "run_summary_sha256": "d7cc57bba43b2c8825a220393e05110149730f377d116ab7851ca0bf31884919",
+    "source_manifest_sha256": "ad56d29958069719651b4f73c37fd29a79d5edcf03bfc9adac6a05b20fc1272b",
+    "split_manifest_sha256": "3ef9d791c090d11a249c66468e4836f79323d4496242c5c1dd74ce071ce7300d",
+    "priority_terms_sha256": "1269cc8e61f8299061e061e77badcbee0670fe63421b67e733b99c252d1b67b3",
+    "required_partitions": [
+      "train",
+      "dev"
+    ],
+    "required_conditions": [
+      "clean",
+      "wind_snr0"
+    ]
+  },
+  "training_selection": {
+    "unit": "recordId group",
+    "algorithm": "lowest SHA-256(assignment:seed:recordId) ranks are clean",
+    "seed": 9119,
+    "clean_fraction": 0.6,
+    "wind_snr0_fraction": 0.4,
+    "rounding": "nearest integer, half up",
+    "each_utterance_seen_once": true
+  },
+  "segment_contract": {
+    "timestamp_unit": "milliseconds",
+    "max_audio_seconds": 12.0,
+    "max_label_tokens": 160,
+    "over_limit_action": "fail",
+    "empty_label_action": "fail",
+    "resample_hz": 16000
+  },
+  "runtime": {
+    "provider": "local_owned_hardware",
+    "location": "local",
+    "architecture": "arm64",
+    "python_major_minor": "3.11",
+    "accelerator_backend": "mps",
+    "machine_type": "apple-m4",
+    "gpu_type": "apple-mps",
+    "gpu_count": 1,
+    "vcpu_count": 10,
+    "memory_gib": 24,
+    "boot_disk_gib": 0,
+    "max_processes": 1,
+    "max_runtime_seconds": 43200,
+    "external_timeout_seconds": 42900,
+    "internal_deadline_seconds": 42600,
+    "retry_count": 0,
+    "require_mps": true,
+    "cpu_training_fallback": false,
+    "dataloader_num_workers": 2,
+    "dataloader_pin_memory": false,
+    "gradient_checkpointing_use_reentrant": false,
+    "deterministic_algorithms": true,
+    "allow_tf32": false,
+    "packages": {
+      "torch_expected_prefix": "2.14.",
+      "transformers": "5.10.1",
+      "peft": "0.20.0",
+      "accelerate": "1.14.0",
+      "numpy": "2.3.5",
+      "scipy": "1.16.3"
+    }
+  },
+  "private_output": {
+    "gcs_prefix": "gs://chemi-check-ml-data-181872008704/experiments/speech/lora/gwangju-v2",
+    "git_commit_allowed": false,
+    "transcript_logging_allowed": false,
+    "record_id_logging_allowed": false,
+    "address_logging_allowed": false,
+    "overwrite_allowed": false
+  },
+  "cost_guard": {
+    "experiment_hard_cap_krw": 0,
+    "total_development_server_cap_krw": 70000,
+    "tracked_prior_development_cost_ceiling_krw": 50000,
+    "compute_billing_ceiling_usd_per_hour": 0,
+    "boot_disk_billing_ceiling_usd": 0,
+    "network_transfer_billing_ceiling_usd": 0,
+    "fx_ceiling_krw_per_usd": 1700,
+    "contingency_fraction": 0.25,
+    "current_quote_required_before_gpu": true,
+    "single_use_remote_claim_required": true
+  },
+  "known_limitations": {
+    "speaker_overlap": "not_evaluated",
+    "event_overlap": "not_evaluated",
+    "untouched_region_test": "not_available",
+    "field_radio_validation": "not_available"
+  },
+  "automatic_training_allowed": false
+}

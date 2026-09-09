@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from chemicheck119_speech import lora_data_preflight
+from chemicheck119_speech.lora_data_preflight import _load_execution_config
 from chemicheck119_speech.lora_tokenizer_preflight import (
     validate_lora_tokenizer_preflight,
 )
@@ -24,6 +25,21 @@ class FakeTokenizer:
 
 
 class LoraTokenizerPreflightTest(unittest.TestCase):
+    def test_registered_transformers_5_execution_config(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+
+        execution, _ = _load_execution_config(
+            root / "config" / "whisper_lora_execution_v2.json"
+        )
+
+        self.assertEqual(
+            "whisper-small-lora-gwangju-execution-v2",
+            execution["protocol_id"],
+        )
+        self.assertEqual(
+            "5.10.1", execution["runtime"]["packages"]["transformers"]
+        )
+
     def test_passes_token_limit_without_exposing_text(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             inputs, execution_sha256 = _fixture(Path(directory))
@@ -80,6 +96,31 @@ class LoraTokenizerPreflightTest(unittest.TestCase):
                     tokenizer=FakeTokenizer(12),
                     tokenizer_version="5.16.1",
                 )
+
+    def test_uses_transformers_version_from_execution_config(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            inputs, _ = _fixture(Path(directory))
+            execution_path = inputs["execution_config_path"]
+            execution = json.loads(execution_path.read_text(encoding="utf-8"))
+            execution["runtime"]["packages"]["transformers"] = "5.10.1"
+            execution_path.write_text(json.dumps(execution), encoding="utf-8")
+            execution_sha256 = lora_data_preflight.hashlib.sha256(
+                execution_path.read_bytes()
+            ).hexdigest()
+            with patch.object(
+                lora_data_preflight,
+                "REGISTERED_EXECUTION_CONFIG_SHA256",
+                execution_sha256,
+            ):
+                report = validate_lora_tokenizer_preflight(
+                    **inputs,
+                    tokenizer=FakeTokenizer(12),
+                    tokenizer_version="5.10.1",
+                )
+
+        self.assertEqual(
+            "5.10.1", report["tokenizer"]["transformers_version"]
+        )
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ import zipfile
 
 from .lora_data_preflight import (
     MAX_LABEL_MEMBER_BYTES,
+    _load_execution_config,
     _object,
     _read_member,
     _safe_members,
@@ -20,11 +21,19 @@ from .lora_data_preflight import (
 from .lora_protocol import load_experiment_config
 
 
-EXPECTED_TRANSFORMERS_VERSION = "4.57.6"
+def _expected_transformers_version(execution_config: dict[str, object]) -> str:
+    runtime = _object(execution_config.get("runtime"), "execution runtime")
+    packages = _object(runtime.get("packages"), "execution runtime packages")
+    version = packages.get("transformers")
+    if not isinstance(version, str) or not version.strip():
+        raise ValueError("execution transformers version must be non-empty")
+    return version
 
 
-def _load_pinned_tokenizer(experiment_config: dict[str, object]):
-    if distribution_version("transformers") != EXPECTED_TRANSFORMERS_VERSION:
+def _load_pinned_tokenizer(
+    experiment_config: dict[str, object], expected_version: str
+):
+    if distribution_version("transformers") != expected_version:
         raise RuntimeError("transformers runtime does not match the execution config")
     try:
         from transformers import WhisperTokenizerFast
@@ -72,10 +81,14 @@ def validate_lora_tokenizer_preflight(
         artifact_root=artifact_root,
         generated_at=generated_at,
     )
+    execution_config, _ = _load_execution_config(execution_config_path)
     experiment_config, _ = load_experiment_config(experiment_config_path)
-    selected_tokenizer = tokenizer or _load_pinned_tokenizer(experiment_config)
-    observed_version = tokenizer_version or EXPECTED_TRANSFORMERS_VERSION
-    if observed_version != EXPECTED_TRANSFORMERS_VERSION:
+    expected_version = _expected_transformers_version(execution_config)
+    selected_tokenizer = tokenizer or _load_pinned_tokenizer(
+        experiment_config, expected_version
+    )
+    observed_version = tokenizer_version or expected_version
+    if observed_version != expected_version:
         raise RuntimeError("tokenizer version does not match the registered runtime")
     training = _object(experiment_config.get("training"), "experiment training")
     maximum_tokens = int(training["max_label_tokens"])
