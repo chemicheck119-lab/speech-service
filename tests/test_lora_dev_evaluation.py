@@ -29,6 +29,8 @@ def _sha256(path: Path) -> str:
 class LoraDevelopmentEvaluationTest(unittest.TestCase):
     def test_runner_pins_two_arms_and_clean_repository(self) -> None:
         source = WIND_RUNNER.read_text(encoding="utf-8")
+        self.assertIn("whisper_lora_execution_v2.json", source)
+        self.assertNotIn("whisper_lora_execution_v1.json", source)
         self.assertIn("status --porcelain", source)
         self.assertIn("ls-remote origin refs/heads/main", source)
         self.assertEqual(2, source.count('run_arm "'))

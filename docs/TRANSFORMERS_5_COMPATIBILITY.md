@@ -11,6 +11,10 @@
 기존 `wind_snr0` LoRA 후보의 성능 기각 결정은 바꾸지 않습니다. 새 버전으로 전체 학습을
 재실행하지 않았고, 신고·현장 무전 정확도 또는 실제 안전성을 검증하지 않았습니다.
 
+현재 `run_whisper_lora_mps_once.sh`와 `run_whisper_lora_wind_dev_once.sh`, 재현 문서의 능동
+실행 명령은 모두 v2 execution config를 사용합니다. v1 config는 기존 학습·평가 artifact의
+역사적 검증용으로만 보존하며 현재 `.[lora]` 환경에서 새 실행을 시작하는 설정이 아닙니다.
+
 ## 목표와 채택 조건
 
 - `transformers 5.10.1`, `peft 0.20.0`, `accelerate 1.14.0`에서 Whisper와 generic PEFT
@@ -106,7 +110,7 @@ PYTHONPATH=src python scripts/export_speech_openapi.py --check
 
 | 사실 상태 | 현재 근거 |
 |---|---|
-| 구현 완료 | v1·v2 config 분리, config 기반 tokenizer version 검증, Transformers 5 feature extractor 저장 호환 코드 |
+| 구현 완료 | v1·v2 config 분리, 능동 runner의 v2 고정, config 기반 tokenizer version 검증, Transformers 5 feature extractor 저장 호환 코드 |
 | 부분 구현 또는 개발용 데모 | 전체 label tokenizer preflight, 합성 MPS 2-step, 기존 adapter load·merge·임시 CTranslate2 변환 |
 | 설계 완료·구현 전 | 새 runtime으로 Whisper-small 전체 LoRA 재학습과 A/B/C 재평가 |
 | 검증되지 않은 가설 | 새 버전이 LoRA 정확도·현장 강건성·안전성을 개선한다는 주장 |
