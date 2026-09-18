@@ -1,5 +1,13 @@
 # 케미체크119 Speech Service
 
+## 2026-09-18 프로젝트 상태
+
+- **구현 완료:** bounded PCM WAV API, 포맷·크기·시간 검증, faster-whisper 전사, segment/timestamp, 안전 경계와 provenance 응답
+- **서비스 연결:** Backend BFF를 통한 Cloud Run preview 연결 및 브라우저 검토 UX 지원
+- **검증 범위:** AIHub 신고 전화 음성 기준선과 제한된 preview smoke
+- **검증되지 않음:** 실제 현장 무전, 실시간 streaming, 상용 동시성, 전화 통신 품질, 전사 정확도의 현장 효과
+- **운영 원칙:** 전사문은 검토 초안이며 CAS 확정·위험 판단·현장 지시를 수행하지 않음
+
 신고·무전 음성을 텍스트와 구간별 신뢰 정보로 변환하는 독립 ASR(Automatic Speech Recognition) 서비스입니다.
 
 ## 책임
